@@ -286,8 +286,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             icon: Icons.location_on_outlined,
             child: Column(
               children: [
+                // Both of these pass the saved value through `_optionOr`.
+                // A Dropdown asserts if its value is not among its items, and
+                // these lists come from a fixed reference file while the saved
+                // value came from the server — a lawyer whose city was typed
+                // before it was on the list, or who has a state the list spells
+                // differently, would otherwise crash this screen the moment it
+                // opened, with no way back into their own profile.
                 DropdownButtonFormField<String>(
-                  value: _state.isEmpty ? null : _state,
+                  value: _optionOr(_state, RefData.states),
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'State'),
                   items: [
@@ -303,7 +310,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _city.isEmpty ? null : _city,
+                  value: _optionOr(_city, RefData.citiesIn(_state)),
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'City'),
                   items: [
@@ -423,6 +430,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
     );
   }
+
+  /// [value] when the dropdown actually has an item for it, else null.
+  ///
+  /// Null shows the label as a hint and leaves the field empty, which is the
+  /// honest thing: we are not going to silently replace what the lawyer saved
+  /// with a value they did not choose, and we cannot display one that is not
+  /// on the list.
+  String? _optionOr(String value, List<String> options) =>
+      options.contains(value) ? value : null;
 
   Widget _field(
     TextEditingController controller,

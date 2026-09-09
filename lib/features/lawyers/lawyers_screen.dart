@@ -299,34 +299,23 @@ class _LawyersScreenState extends State<LawyersScreen> {
               ],
             ),
           ),
+          // The count only. Sorting is the chip row above, and it used to be
+          // *also* a dropdown here — two controls over one piece of state,
+          // which is how they drifted apart: the chips set 'fee-low' and this
+          // dropdown only ever listed 'fee', so tapping the Fee chip left the
+          // dropdown holding a value it had no item for and Flutter asserted.
+          // Its 'fee' was not a sort the server knows either, so "Lowest rate"
+          // had never actually sorted by rate.
           if (!_loading && _error == null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Row(
-                children: [
-                  Text(
-                    '$_total ${_total == 1 ? 'lawyer' : 'lawyers'} found',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const Spacer(),
-                  DropdownButton<String>(
-                    value: _query.sort,
-                    underline: const SizedBox.shrink(),
-                    isDense: true,
-                    style: TextStyle(fontSize: 13, color: AppColors.inkStrong),
-                    items: const [
-                      DropdownMenuItem(value: 'relevance', child: Text('Most relevant')),
-                      DropdownMenuItem(value: 'rating', child: Text('Top rated')),
-                      DropdownMenuItem(value: 'experience', child: Text('Most experienced')),
-                      DropdownMenuItem(value: 'fee', child: Text('Lowest rate')),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _query = _query.copyWith(sort: v));
-                      _load();
-                    },
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
+              child: Text(
+                '$_total ${_total == 1 ? 'lawyer' : 'lawyers'} found',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink.withValues(alpha: 0.55),
+                ),
               ),
             ),
           Expanded(child: _body()),
@@ -358,12 +347,21 @@ class _LawyersScreenState extends State<LawyersScreen> {
   /// nothing else. A chip that quietly did nothing would be worse than its
   /// absence — the reader would believe the list in front of them was ordered
   /// by how near each lawyer is, and choose from the top of it.
+  /// The sorts the server implements, and the only place they are named.
+  ///
+  /// These strings go straight into the query, so each must be one of
+  /// ADVOCATE_SORTS in the web project's lib/advocateSearch.js — 'relevance',
+  /// 'rating', 'experience', 'fee-low', 'fee-high'. A value that is not on
+  /// that list is silently ignored by the server, which shows up as a sort
+  /// button that does nothing rather than as an error.
+  static const _sorts = [
+    (value: 'rating', label: 'Top rated'),
+    (value: 'experience', label: 'Most experienced'),
+    (value: 'fee-low', label: 'Lowest fee'),
+  ];
+
   Widget _sortChips() {
-    const sorts = [
-      (value: 'rating', label: 'Rating'),
-      (value: 'experience', label: 'Experience'),
-      (value: 'fee-low', label: 'Fee'),
-    ];
+    const sorts = _sorts;
 
     return SizedBox(
       height: 34,

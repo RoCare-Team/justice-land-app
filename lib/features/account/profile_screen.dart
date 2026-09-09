@@ -105,6 +105,15 @@ class ProfileScreen extends StatelessWidget {
                 label: 'My Consultations',
                 onTap: () => context.go('/consultations'),
               ),
+              // Consultations and orders both live here rather than in the
+              // bottom bar: each matters enormously on the day you have one
+              // and not at all on the days you do not, which is the wrong
+              // shape for a permanent tab.
+              _Row(
+                icon: Icons.receipt_long_outlined,
+                label: 'My Orders',
+                onTap: () => context.push('/orders'),
+              ),
               _Row(
                 icon: Icons.article_outlined,
                 label: 'Legal Guides',

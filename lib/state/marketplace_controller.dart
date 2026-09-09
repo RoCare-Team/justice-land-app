@@ -39,6 +39,17 @@ class MarketplaceController extends ChangeNotifier {
   final AuthController _auth;
 
   ServiceCatalogue _catalogue = ServiceCatalogue.empty;
+
+  /// The catalogue with no filter applied.
+  ///
+  /// Kept apart from [_catalogue] because two screens read this controller and
+  /// want different things: the landing page must always show every shelf and
+  /// the most-bought services overall, while the all-services list shows what
+  /// the current filter matched. Sharing one list meant that filtering to
+  /// "Documentation" and then going back left the landing page claiming the
+  /// whole catalogue was four documents.
+  ServiceCatalogue _all = ServiceCatalogue.empty;
+
   String _category = '';
   String _query = '';
   bool _loading = false;
@@ -53,8 +64,16 @@ class MarketplaceController extends ChangeNotifier {
   ServiceOrder? _placedOrder;
 
   ServiceCatalogue get catalogue => _catalogue;
+
+  /// What the current filter matched — the all-services list.
   List<ServiceProduct> get services => _catalogue.services;
-  List<ServiceCategory> get categories => _catalogue.categories;
+
+  /// The whole catalogue, whatever the filter — the landing page.
+  List<ServiceProduct> get allServices => _all.services;
+
+  /// Every shelf. Read from the unfiltered load, so narrowing to one category
+  /// never makes the other categories disappear from the picker.
+  List<ServiceCategory> get categories => _all.categories;
   String get category => _category;
   String get query => _query;
   bool get loading => _loading;
@@ -76,6 +95,9 @@ class MarketplaceController extends ChangeNotifier {
     }
     try {
       _catalogue = await _service.catalogue(category: _category, query: _query);
+      // An unfiltered read is also the freshest picture of the whole
+      // catalogue, so it doubles as the landing page's copy.
+      if (_category.isEmpty && _query.isEmpty) _all = _catalogue;
       _error = null;
     } on ApiException catch (e) {
       _error = e.message;
@@ -85,10 +107,15 @@ class MarketplaceController extends ChangeNotifier {
     }
   }
 
-  /// Tapping the shelf that is already open clears the filter, so a chip row
-  /// is a toggle and there is always a way back to the whole catalogue.
-  Future<void> setCategory(String value) async {
-    final next = _category == value ? '' : value;
+  /// Choose a shelf.
+  ///
+  /// Tapping the shelf that is already open clears it, so a chip row is a
+  /// toggle and there is always a way back to the whole catalogue. Pass
+  /// [replace] to set the value outright instead — that is what an explicit
+  /// "All" chip does, and what arriving on the screen with a category already
+  /// chosen does, neither of which should toggle.
+  Future<void> setCategory(String value, {bool replace = false}) async {
+    final next = (!replace && _category == value) ? '' : value;
     if (next == _category) return;
     _category = next;
     await load();
@@ -97,6 +124,17 @@ class MarketplaceController extends ChangeNotifier {
   Future<void> search(String value) async {
     if (value.trim() == _query) return;
     _query = value.trim();
+    await load();
+  }
+
+  /// Back to the whole catalogue.
+  ///
+  /// The landing page needs this on every visit: its job is to show every
+  /// shelf, and a category left set from a previous visit would hide most of
+  /// them behind a filter the reader never chose on this screen.
+  Future<void> clearFilters() async {
+    _category = '';
+    _query = '';
     await load();
   }
 

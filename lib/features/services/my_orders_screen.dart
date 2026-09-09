@@ -136,7 +136,7 @@ class _OrderCardState extends State<_OrderCard> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${order.reference} · ${Formatters.date(order.createdAt)}',
+                          '${order.reference} · ${Fmt.date(order.createdAt)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.ink.withValues(alpha: 0.55),
@@ -151,7 +151,7 @@ class _OrderCardState extends State<_OrderCard> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              Formatters.money(a.payable),
+                              Fmt.money(a.payable),
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
@@ -179,25 +179,25 @@ class _OrderCardState extends State<_OrderCard> {
               padding: const EdgeInsets.all(14),
               child: Column(
                 children: [
-                  _line('Service fee', Formatters.money(a.base)),
+                  _line('Service fee', Fmt.money(a.base)),
                   if (a.discount > 0)
                     _line(
                       order.couponCode.isEmpty
                           ? 'Discount'
                           : 'Coupon ${order.couponCode}',
-                      '− ${Formatters.money(a.discount)}',
+                      '− ${Fmt.money(a.discount)}',
                       tone: AppColors.success,
                     ),
-                  _line('GST (${a.gstPercent}%)', Formatters.money(a.gst)),
+                  _line('GST (${a.gstPercent}%)', Fmt.money(a.gst)),
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 9),
                     child: Divider(height: 1),
                   ),
-                  _line('Total paid', Formatters.money(a.payable), bold: true),
+                  _line('Total paid', Fmt.money(a.payable), bold: true),
                   if (a.walletUsed > 0)
                     _line(
                       'From wallet',
-                      Formatters.money(a.walletUsed),
+                      Fmt.money(a.walletUsed),
                       tone: AppColors.success,
                     ),
                   if (order.address.oneLine.isNotEmpty) ...[

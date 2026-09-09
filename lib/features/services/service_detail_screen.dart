@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/common.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/states.dart';
 import '../../models/marketplace.dart';
@@ -89,11 +89,9 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           flexibleSpace: service.banner.isEmpty
               ? null
               : FlexibleSpaceBar(
-                  background: CachedNetworkImage(
-                    imageUrl: service.banner,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) =>
-                        Container(color: AppColors.primary),
+                  background: RemoteImage(
+                    source: service.banner,
+                    fallback: Container(color: AppColors.primary),
                   ),
                 ),
         ),
@@ -184,7 +182,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       if (service.turnaround.isNotEmpty)
         _fact(Icons.schedule_rounded, service.turnaround, 'Turnaround'),
       if (service.hasRating)
-        _fact(Icons.star_rounded, Formatters.rating(service.rating),
+        _fact(Icons.star_rounded, Fmt.rating(service.rating),
             '${service.reviews} reviews'),
       if (service.purchased > 0)
         _fact(Icons.verified_rounded, '${service.purchased}', 'Purchased'),
@@ -402,7 +400,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 Row(
                   children: [
                     Text(
-                      Formatters.money(service.price),
+                      Fmt.money(service.price),
                       style: const TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
@@ -412,7 +410,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                     if (service.hasOffer) ...[
                       const SizedBox(width: 6),
                       Text(
-                        Formatters.money(service.mrp),
+                        Fmt.money(service.mrp),
                         style: TextStyle(
                           fontSize: 12.5,
                           decoration: TextDecoration.lineThrough,
@@ -423,7 +421,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   ],
                 ),
                 Text(
-                  '+ GST',
+                  '+ 18% GST',
                   style: TextStyle(
                     fontSize: 11,
                     color: AppColors.ink.withValues(alpha: 0.5),
@@ -435,7 +433,15 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
             Expanded(
               child: FilledButton(
                 onPressed: () => context.push('/services/${service.slug}/order'),
-                child: const Text('Continue'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Next'),
+                    SizedBox(width: 6),
+                    Icon(Icons.arrow_forward_rounded, size: 17),
+                  ],
+                ),
               ),
             ),
           ],

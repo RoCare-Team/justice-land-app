@@ -222,70 +222,164 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
   Widget _addressCard() {
     final complete = _address.isComplete;
+    // The number came from OTP at sign-in, so it is the one field on this card
+    // that is proven rather than typed. Saying so is worth a badge: it tells
+    // the client which detail they do not need to check.
+    final verified = context.read<AuthController>().user?.phone ?? '';
+    final phoneIsVerified =
+        verified.isNotEmpty && _address.phone.replaceAll(' ', '').endsWith(verified);
+
+    // An invoice needs a name and an email to go to. Missing either is not
+    // worth blocking the order over — the work still gets done — but it is
+    // worth saying now rather than after they have paid.
+    final missingInvoice = complete &&
+        (_address.name.trim().isEmpty || _address.email.trim().isEmpty);
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: _cardDecoration,
+      clipBehavior: Clip.antiAlias,
       child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Billing details',
+                        style: TextStyle(
+                            fontSize: 14.5, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _editAddress,
+                      icon: const Icon(Icons.edit_outlined, size: 15),
+                      label: Text(complete ? 'Edit' : 'Add'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (!complete)
+                  Text(
+                    'We need a name, mobile number and address before this can '
+                    'be ordered.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.45,
+                      color: AppColors.ink.withValues(alpha: 0.55),
+                    ),
+                  )
+                else ...[
+                  Text(
+                    _address.name.trim().isEmpty ? 'Name not set' : _address.name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: _address.name.trim().isEmpty
+                          ? AppColors.warning
+                          : AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _line(
+                    Icons.mail_outline_rounded,
+                    _address.email.trim().isEmpty
+                        ? 'Email not added'
+                        : _address.email,
+                    muted: _address.email.trim().isEmpty,
+                  ),
+                  _line(
+                    Icons.phone_outlined,
+                    _address.phone,
+                    trailing: phoneIsVerified ? const _VerifiedPill() : null,
+                  ),
+                  _line(Icons.location_on_outlined, _address.oneLine),
+                  if (_address.gstin.isNotEmpty)
+                    _line(Icons.receipt_long_outlined, 'GSTIN ${_address.gstin}'),
+                ],
+              ],
+            ),
+          ),
+          if (missingInvoice)
+            InkWell(
+              onTap: _editAddress,
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                color: AppColors.warningSoft,
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        size: 16, color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Add your name & email to receive your invoice',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      'Add →',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// One line of the address block: icon, text, optional badge.
+  Widget _line(
+    IconData icon,
+    String text, {
+    bool muted = false,
+    Widget? trailing,
+  }) {
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Billing details',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                ),
+          Icon(icon,
+              size: 14,
+              color: muted
+                  ? AppColors.warning
+                  : AppColors.ink.withValues(alpha: 0.45)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.4,
+                color: muted
+                    ? AppColors.warning
+                    : AppColors.ink.withValues(alpha: 0.72),
               ),
-              TextButton(
-                onPressed: _editAddress,
-                child: Text(complete ? 'Edit' : 'Add'),
-              ),
-            ],
+            ),
           ),
-          if (!complete)
-            Text(
-              'We need a name, mobile number and address before this can be ordered.',
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.45,
-                color: AppColors.ink.withValues(alpha: 0.55),
-              ),
-            )
-          else ...[
-            Text(
-              _address.name,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              _address.oneLine,
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.45,
-                color: AppColors.ink.withValues(alpha: 0.65),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              _address.phone,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: AppColors.ink.withValues(alpha: 0.65),
-              ),
-            ),
-            if (_address.gstin.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                'GSTIN ${_address.gstin}',
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ],
+          if (trailing != null) ...[const SizedBox(width: 8), trailing],
         ],
       ),
     );
@@ -381,7 +475,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     ),
                   ),
                   Text(
-                    '− ${Formatters.money(quote.amounts.discount)}',
+                    '− ${Fmt.money(quote.amounts.discount)}',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -453,8 +547,8 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           balance <= 0
               ? 'Your wallet is empty'
               : _useWallet && quote.amounts.walletUsed > 0
-                  ? '${Formatters.money(quote.amounts.walletUsed)} of ${Formatters.money(balance)} will be used'
-                  : 'Available: ${Formatters.money(balance)}',
+                  ? '${Fmt.money(quote.amounts.walletUsed)} of ${Fmt.money(balance)} will be used'
+                  : 'Available: ${Fmt.money(balance)}',
           style: TextStyle(
             fontSize: 12.5,
             color: AppColors.ink.withValues(alpha: 0.6),
@@ -517,38 +611,39 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          _line('Service fee', Formatters.money(a.base)),
+          _amountLine('Service fee', Fmt.money(a.base)),
           if (a.discount > 0)
-            _line(
+            _amountLine(
               'Coupon discount',
-              '− ${Formatters.money(a.discount)}',
+              '− ${Fmt.money(a.discount)}',
               tone: AppColors.success,
             ),
-          _line('GST (${a.gstPercent}%)', Formatters.money(a.gst)),
+          _amountLine('GST (${a.gstPercent}%)', Fmt.money(a.gst)),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1),
           ),
-          _line('Total', Formatters.money(a.payable), bold: true),
+          _amountLine('Total', Fmt.money(a.payable), bold: true),
           if (a.walletUsed > 0) ...[
             const SizedBox(height: 6),
-            _line(
+            _amountLine(
               'Paid from wallet',
-              '− ${Formatters.money(a.walletUsed)}',
+              '− ${Fmt.money(a.walletUsed)}',
               tone: AppColors.success,
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
               child: Divider(height: 1),
             ),
-            _line('To pay now', Formatters.money(a.razorpayAmount), bold: true),
+            _amountLine('To pay now', Fmt.money(a.razorpayAmount), bold: true),
           ],
         ],
       ),
     );
   }
 
-  Widget _line(String label, String value, {bool bold = false, Color? tone}) {
+  Widget _amountLine(String label, String value,
+      {bool bold = false, Color? tone}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -605,7 +700,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  walletOnly ? 'Wallet' : Formatters.money(due),
+                  walletOnly ? 'Wallet' : Fmt.money(due),
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -678,6 +773,38 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     borderRadius: BorderRadius.circular(14),
     border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
   );
+}
+
+/// "Verified", for the mobile number the account was created with.
+class _VerifiedPill extends StatelessWidget {
+  const _VerifiedPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.successSoft,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded, size: 11, color: AppColors.success),
+          SizedBox(width: 3),
+          Text(
+            'Verified',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.success,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Upper-cases as you type, so a coupon matches however the keyboard behaved.

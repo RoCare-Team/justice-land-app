@@ -178,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
             : 'Good Evening';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
       decoration: const BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.only(
@@ -667,81 +667,115 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Client quotes, as a carousel that admits it is one.
+  ///
+  /// The card width is a fraction of the screen rather than a fixed 280, so the
+  /// next card always peeks past the right edge — on a narrow phone a fixed
+  /// width filled the viewport exactly and the row looked like a single card
+  /// that had been chopped off, which is what it was being read as.
+  ///
+  /// The list keeps its own horizontal padding and the section breaks out of
+  /// the page's, so a card scrolling away passes under the screen edge instead
+  /// of being clipped against an invisible 16px wall.
   Widget _testimonialsSection() {
+    final width = MediaQuery.of(context).size.width;
+    final cardWidth = (width * 0.74).clamp(240.0, 320.0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('What our clients say',
             style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 178,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _testimonials.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (_, i) {
-              final t = _testimonials[i];
-              return Container(
-                width: 280,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    RatingStars(
-                      rating: t.rating.toDouble(),
-                      size: 14,
-                      showValue: false,
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: Text(
-                        t.text,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, height: 1.5),
-                      ),
-                    ),
-                    const Divider(height: 18),
-                    Row(
-                      children: [
-                        Avatar(name: t.name, size: 30),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                t.name,
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                [t.role, t.city].where((s) => s.isNotEmpty).join(' · '),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.inkFaint,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
+        const SizedBox(height: 3),
+        Text(
+          'Real feedback from people we have helped',
+          style: TextStyle(
+            fontSize: 12.5,
+            color: AppColors.ink.withValues(alpha: 0.55),
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Negative margin cancels the page padding for this row only.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 0),
+          child: SizedBox(
+            height: 196,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              padding: EdgeInsets.zero,
+              itemCount: _testimonials.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => _testimonialCard(_testimonials[i], cardWidth),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _testimonialCard(Testimonial t, double width) {
+    final byline = [t.role, t.city].where((s) => s.isNotEmpty).join(' · ');
+
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RatingStars(rating: t.rating.toDouble(), size: 14, showValue: false),
+          const SizedBox(height: 10),
+          // Expanded, so the quote takes whatever is left after the fixed
+          // furniture above and below rather than pushing them off the card.
+          Expanded(
+            child: Text(
+              t.text,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
+          ),
+          const Divider(height: 18),
+          Row(
+            children: [
+              Avatar(name: t.name, size: 30),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      t.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (byline.isNotEmpty)
+                      Text(
+                        byline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.inkFaint,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

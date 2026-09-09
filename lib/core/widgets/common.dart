@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -5,10 +8,116 @@ import '../config/app_config.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 
-/// A lawyer or client photo, falling back to their initial.
+/// Any image the backend hands us, however it chose to hand it over.
 ///
-/// Photos are stored as paths relative to the site, so a bare `/uploads/x.jpg`
-/// is resolved against the API host rather than failing silently.
+/// This platform serves the same photograph three different ways depending on
+/// which endpoint you asked, and every one of them needs different handling:
+///
+///   `/api/advocates/<id>/photo`   a path relative to the API host — the list
+///                                 endpoint sends this, because the photos are
+///                                 megabytes and must not travel inside a
+///                                 directory payload
+///   `data:image/jpeg;base64,...`  the bytes inline — the detail endpoint sends
+///                                 this, since it is reading the one document
+///                                 anyway
+///   `https://...`                 an absolute URL
+///
+/// Every call site used to pick one of those and get the other two wrong.
+/// `CachedNetworkImage` cannot load a `data:` URI at all, and it cannot load a
+/// bare `/api/...` path either, so lawyers with a photograph were showing their
+/// initials on the cards *and* on their own profile. Deciding this once, here,
+/// is what stops that from coming back the next time an endpoint changes which
+/// form it sends.
+class RemoteImage extends StatelessWidget {
+  const RemoteImage({
+    super.key,
+    required this.source,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    this.placeholder,
+    this.fallback,
+  });
+
+  /// Whatever the API gave us: a path, a data URI, or an absolute URL.
+  final String? source;
+
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+
+  /// Shown while a network image loads. Never shown for inline bytes, which
+  /// are already here.
+  final Widget? placeholder;
+
+  /// Shown when there is no image, or when one fails to load.
+  final Widget? fallback;
+
+  /// Absolute URL for a network image, or '' when [raw] is empty or inline.
+  ///
+  /// Returns '' for a `data:` URI on purpose: those carry their own bytes and
+  /// have no URL to resolve. Prepending the API host to one — which is what
+  /// this used to do — produces a nonsense address that always 404s.
+  static String resolveUrl(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('data:')) return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('//')) return 'https:$value';
+    return '${AppConfig.baseUrl}${value.startsWith('/') ? '' : '/'}$value';
+  }
+
+  /// The bytes of a `data:` URI, or null for anything else.
+  ///
+  /// Malformed base64 returns null rather than throwing: one corrupt record
+  /// should cost that lawyer their photograph, not blank the whole screen.
+  static Uint8List? inlineBytes(String? raw) {
+    final value = (raw ?? '').trim();
+    if (!value.startsWith('data:')) return null;
+    final comma = value.indexOf(',');
+    if (comma < 0) return null;
+    try {
+      return base64Decode(value.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True when there is something to draw — so a caller can lay out a slot for
+  /// an image only when one exists.
+  static bool has(String? raw) =>
+      resolveUrl(raw).isNotEmpty || inlineBytes(raw) != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final empty = fallback ?? const SizedBox.shrink();
+
+    final bytes = inlineBytes(source);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: (_, __, ___) => empty,
+      );
+    }
+
+    final url = resolveUrl(source);
+    if (url.isEmpty) return empty;
+
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: fit,
+      width: width,
+      height: height,
+      placeholder: (_, __) => placeholder ?? Container(color: AppColors.muted),
+      errorWidget: (_, __, ___) => empty,
+    );
+  }
+}
+
+/// A lawyer or client photo, falling back to their initial.
 class Avatar extends StatelessWidget {
   const Avatar({
     super.key,
@@ -27,17 +136,21 @@ class Avatar extends StatelessWidget {
   /// unavailable.
   final bool? online;
 
-  static String resolveUrl(String? raw) {
-    final value = (raw ?? '').trim();
-    if (value.isEmpty) return '';
-    if (value.startsWith('http://') || value.startsWith('https://')) return value;
-    if (value.startsWith('//')) return 'https:$value';
-    return '${AppConfig.baseUrl}${value.startsWith('/') ? '' : '/'}$value';
-  }
+  /// Kept as the name every caller already uses; the rule itself lives in
+  /// [RemoteImage] so there is one answer to "what is this image".
+  static String resolveUrl(String? raw) => RemoteImage.resolveUrl(raw);
 
   @override
   Widget build(BuildContext context) {
-    final url = resolveUrl(photo);
+    final initial = Text(
+      Fmt.initial(name),
+      style: TextStyle(
+        fontSize: size * 0.38,
+        fontWeight: FontWeight.w700,
+        color: AppColors.primary,
+      ),
+    );
+
     final avatar = Container(
       height: size,
       width: size,
@@ -48,30 +161,12 @@ class Avatar extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
-      child: url.isEmpty
-          ? Text(
-              Fmt.initial(name),
-              style: TextStyle(
-                fontSize: size * 0.38,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-              ),
-            )
-          : CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.cover,
-              width: size,
-              height: size,
-              placeholder: (_, __) => Container(color: AppColors.muted),
-              errorWidget: (_, __, ___) => Text(
-                Fmt.initial(name),
-                style: TextStyle(
-                  fontSize: size * 0.38,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
+      child: RemoteImage(
+        source: photo,
+        width: size,
+        height: size,
+        fallback: initial,
+      ),
     );
 
     if (online == null) return avatar;

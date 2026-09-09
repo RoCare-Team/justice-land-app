@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -222,7 +221,7 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
       flexibleSpace: cover.isEmpty
           ? null
           : FlexibleSpaceBar(
-              background: CachedNetworkImage(
+              background: RemoteImage(
                 imageUrl: cover,
                 fit: BoxFit.cover,
                 errorWidget: (_, __, ___) => Container(color: AppColors.muted),
@@ -490,13 +489,11 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
           separatorBuilder: (_, __) => const SizedBox(width: 10),
           itemBuilder: (_, i) => ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: CachedNetworkImage(
-              imageUrl: Avatar.resolveUrl(advocate.gallery[i]),
+            child: RemoteImage(
+              source: advocate.gallery[i],
               width: 150,
-              fit: BoxFit.cover,
-              placeholder: (_, __) => Container(width: 150, color: AppColors.muted),
-              errorWidget: (_, __, ___) =>
-                  Container(width: 150, color: AppColors.muted),
+              placeholder: Container(width: 150, color: AppColors.muted),
+              fallback: Container(width: 150, color: AppColors.muted),
             ),
           ),
         ),

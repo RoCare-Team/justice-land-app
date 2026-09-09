@@ -134,6 +134,24 @@ Three things about this are worth knowing before changing any of it:
   recorded on it for an admin to chase. Refusing at that point would be taking
   the money and delivering nothing.
 
+### Images
+
+Every image on this platform arrives in one of three shapes and they are not
+interchangeable:
+
+- `/api/advocates/<id>/photo` — a path relative to the API host. The *list*
+  endpoint sends this, because photographs are megabytes and must not travel
+  inside a directory payload.
+- `data:image/jpeg;base64,...` — the bytes inline. The *detail* endpoint sends
+  the same photograph this way, since it is reading the one document anyway.
+- An absolute `https://` URL.
+
+`CachedNetworkImage` handles only the third. Use `RemoteImage` from
+`core/widgets/common.dart` for all of them — it decodes inline bytes, resolves
+relative paths against the API host, and falls back cleanly. Passing a raw
+value straight to `CachedNetworkImage` is what had every lawyer showing their
+initial instead of their face.
+
 ### Talk to a Lawyer
 
 The grid at the top of `/services` is **not** part of the marketplace. Each
@@ -236,17 +254,23 @@ node tool/check_reference_data.mjs    # the bundled lists still match src/data
 
 ## The screens
 
-Five tabs at the bottom. The middle two are the difference between the two
-people who use this app: a client gets their consultations, their wallet and
-their profile; a lawyer gets their dashboard in place of the wallet, because a
-lawyer earns rather than tops up.
+Five tabs at the bottom: **Home · Services · Top Lawyers · Wallet · Profile**,
+with Top Lawyers in the raised gold middle slot because reaching a lawyer is
+what the app is for. A lawyer gets their Dashboard in place of the Wallet,
+because a lawyer earns rather than tops up.
+
+Consultations are deliberately not a tab. A client has one open occasionally,
+and giving a rarely-used destination a fifth of the bar cost the two things
+that are used constantly. It is reached from the bell in the home header and
+from Profile → My Consultations, both always one tap away. Orders sit beside
+it at Profile → My Orders.
 
 | Screen | Route | File | Reads |
 |---|---|---|---|
 | Splash | `/splash` | `features/splash/splash_screen.dart` | `GET /api/auth/me` |
 | Onboarding (first launch only) | `/onboarding` | `features/onboarding/onboarding_screen.dart` | — |
 | Home | `/` | `features/home/home_screen.dart` | `advocates/nearby`, `services`, `testimonials`, `presence` |
-| Find Lawyer — results | `/lawyers` | `features/lawyers/lawyers_screen.dart` | `GET /api/advocates` |
+| Top Lawyers — results | `/lawyers` | `features/lawyers/lawyers_screen.dart` | `GET /api/advocates` |
 | Find Lawyer — filters | pushed | `features/lawyers/filter_screen.dart` | `services`, `cities` |
 | Advocate profile | `/lawyers/<path>` | `features/lawyers/advocate_profile_screen.dart` | `GET /api/advocates/<path>` |
 | Chat | `/consultation/<id>/chat` | `features/consultation/chat_screen.dart` | `consultations/<id>`, `messages` |
@@ -259,7 +283,8 @@ lawyer earns rather than tops up.
 | Legal Guides | `/blogs` | `features/content/content_screens.dart` | `GET /api/blogs` |
 | Advocate Dashboard | `/dashboard` | `features/dashboard/dashboard_screen.dart` | `consultations`, `enquiries` |
 | Lawyer sign-in / registration | `/advocate/login`, `/advocate/register` | `features/auth/advocate_auth_screen.dart` | `auth/advocate/otp/*`, `auth/advocate/signup` |
-| Legal Services catalogue | `/services` | `features/services/services_screen.dart` | `GET /api/marketplace/services` |
+| Legal Services landing | `/services` | `features/services/services_screen.dart` | `GET /api/marketplace/services` |
+| All services (search + shelves) | `/services/all` | `features/services/all_services_screen.dart` | `GET /api/marketplace/services` |
 | Service detail | `/services/<slug>` | `features/services/service_detail_screen.dart` | `GET /api/marketplace/services/<slug>` |
 | Order summary | `/services/<slug>/order` | `features/services/order_summary_screen.dart` | `marketplace/quote`, `marketplace/orders`, `orders/verify` |
 | My orders | `/orders` | `features/services/my_orders_screen.dart` | `GET /api/marketplace/orders` |

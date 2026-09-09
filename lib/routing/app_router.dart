@@ -21,6 +21,7 @@ import '../features/lawyers/advocate_profile_screen.dart';
 import '../features/lawyers/lawyers_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/onboarding/role_selection_screen.dart';
+import '../features/services/all_services_screen.dart';
 import '../features/services/my_orders_screen.dart';
 import '../features/services/order_summary_screen.dart';
 import '../features/services/service_detail_screen.dart';
@@ -107,6 +108,17 @@ class AppRouter {
         ),
 
         GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
+
+        // Declared before '/services/:slug' on purpose. go_router takes the
+        // first route that matches, and without this ordering the literal
+        // 'all' would be read as a service slug and 404.
+        GoRoute(
+          path: '/services/all',
+          builder: (context, state) => AllServicesScreen(
+            initialCategory: state.uri.queryParameters['category'] ?? '',
+            autofocusSearch: state.uri.queryParameters['focus'] == '1',
+          ),
+        ),
 
         // A service keeps the shape of its slug, so a link to
         // /services/trademark-registration opens the same thing everywhere.
@@ -221,11 +233,21 @@ class AppShell extends StatelessWidget {
 
   static const AppTab _home =
       (path: '/', icon: Icons.home_outlined, active: Icons.home_rounded, label: 'Home');
-  static const AppTab _find = (
+  /// The raised gold slot. Reaching a lawyer is the errand this app exists
+  /// for, and on a bar of five identical grey icons it looked exactly as
+  /// important as "Profile", which it is not.
+  static const AppTab _topLawyers = (
     path: '/lawyers',
-    icon: Icons.search_outlined,
-    active: Icons.search_rounded,
-    label: 'Find Lawyer',
+    icon: Icons.gavel_outlined,
+    active: Icons.gavel_rounded,
+    label: 'Top Lawyers',
+  );
+
+  static const AppTab _services = (
+    path: '/services',
+    icon: Icons.workspace_premium_outlined,
+    active: Icons.workspace_premium_rounded,
+    label: 'Services',
   );
   static const AppTab _consultations = (
     path: '/consultations',
@@ -257,18 +279,24 @@ class AppShell extends StatelessWidget {
     final auth = context.watch<AuthController>();
     final location = GoRouterState.of(context).uri.path;
 
+    // Top Lawyers sits in the middle, in the raised gold slot, because it is
+    // what someone opens this app to do. Services takes the slot beside it —
+    // the second thing there is to buy here, and the one a client browsing
+    // rather than in trouble is after.
+    //
+    // Consultations are not a tab. A client has one open only occasionally,
+    // and giving a rarely-used destination a fifth of the bar cost the two
+    // things that are used constantly. It is reached from the bell in the home
+    // header and from Profile, both of which are always one tap away.
     final List<AppTab> tabs = auth.isAdvocate
-        ? const [_home, _find, _dashboard, _consultations, _profile]
-        : const [_home, _find, _consultations, _wallet, _profile];
+        ? const [_home, _services, _topLawyers, _dashboard, _profile]
+        : const [_home, _services, _topLawyers, _wallet, _profile];
 
     // A route that is not itself a tab keeps the bar on Home rather than on
     // nothing; anything pushed over the shell covers the bar anyway.
     var index = tabs.indexWhere((t) => t.path == location);
     if (index < 0) index = 0;
 
-    // The middle slot is raised and gold. It is the one thing this app is for
-    // — reaching a lawyer — and on a bar of five identical grey icons that
-    // errand looks exactly as important as "Profile", which it is not.
     final middle = tabs.length ~/ 2;
 
     return Scaffold(

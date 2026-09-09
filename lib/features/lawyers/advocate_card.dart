@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/consultation_slots.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/common.dart';
 import '../../models/advocate.dart';
 
 /// One lawyer, as the directory shows them.
@@ -90,16 +91,20 @@ class AdvocateCard extends StatelessWidget {
             child: SizedBox(
               width: 78,
               height: 94,
-              child: advocate.photo.isEmpty
-                  ? _fallbackPortrait()
-                  : CachedNetworkImage(
-                      imageUrl: advocate.photo,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        color: AppColors.primary.withValues(alpha: 0.06),
-                      ),
-                      errorWidget: (_, __, ___) => _fallbackPortrait(),
-                    ),
+              // Through RemoteImage, because the list endpoint sends this as
+              // a path relative to the API host and the detail endpoint sends
+              // the same photograph as inline bytes. Handing either straight
+              // to CachedNetworkImage is what used to leave every lawyer
+              // showing their initial.
+              child: RemoteImage(
+                source: advocate.photo,
+                width: 78,
+                height: 94,
+                placeholder: Container(
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                ),
+                fallback: _fallbackPortrait(),
+              ),
             ),
           ),
           if (online != null)

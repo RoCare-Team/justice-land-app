@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -169,8 +168,8 @@ class _BlogsScreenState extends State<BlogsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (post.image.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: Avatar.resolveUrl(post.image),
+                RemoteImage(
+                  source: post.image,
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -325,8 +324,8 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
         padding: EdgeInsets.zero,
         children: [
           if (post.image.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: Avatar.resolveUrl(post.image),
+            RemoteImage(
+              source: post.image,
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
