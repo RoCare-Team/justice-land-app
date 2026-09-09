@@ -370,41 +370,48 @@ class AppShell extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Transform.translate(
-            // Lifted clear of the bar. `extendBody` on the Scaffold is what
-            // lets it sit over the content rather than being clipped by it.
-            offset: const Offset(0, -12),
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.surface, width: 3.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+          // Lifted clear of the bar, and claiming only the 38 pixels it
+          // actually occupies inside it. Charging the bar for all 50 pushed the
+          // label past the bar's bottom edge — by 3px at normal text size, and
+          // further as the label grows. `extendBody` on the Scaffold is what
+          // lets the lifted part sit over the content rather than being
+          // clipped by it.
+          SizedBox(
+            height: 38,
+            child: OverflowBox(
+              minHeight: 50,
+              maxHeight: 50,
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.surface, width: 3.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(tab.active, size: 23, color: AppColors.primaryDark),
               ),
-              child: Icon(tab.active, size: 23, color: AppColors.primaryDark),
             ),
           ),
-          Transform.translate(
-            offset: const Offset(0, -10),
-            child: Text(
-              tab.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected
-                    ? AppColors.primary
-                    : AppColors.ink.withValues(alpha: 0.55),
-              ),
+          const SizedBox(height: 2),
+          Text(
+            tab.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              color: selected
+                  ? AppColors.primary
+                  : AppColors.ink.withValues(alpha: 0.55),
             ),
           ),
         ],

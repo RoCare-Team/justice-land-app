@@ -173,10 +173,8 @@ class _BlogsScreenState extends State<BlogsScreen> {
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  placeholder: (_, __) =>
-                      Container(height: 150, color: AppColors.muted),
-                  errorWidget: (_, __, ___) =>
-                      Container(height: 150, color: AppColors.muted),
+                  placeholder: Container(height: 150, color: AppColors.muted),
+                  fallback: Container(height: 150, color: AppColors.muted),
                 ),
               Padding(
                 padding: const EdgeInsets.all(14),
@@ -329,8 +327,7 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
-              errorWidget: (_, __, ___) =>
-                  Container(height: 200, color: AppColors.muted),
+              fallback: Container(height: 200, color: AppColors.muted),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),

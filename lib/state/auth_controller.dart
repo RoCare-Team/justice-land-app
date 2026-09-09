@@ -198,6 +198,7 @@ class AuthController extends ChangeNotifier {
       photo: current.photo,
       city: current.city,
       anonymous: current.anonymous,
+      billingAddress: current.billingAddress,
       walletBalance: wallet.balance,
       walletTransactions: wallet.transactions,
       createdAt: current.createdAt,

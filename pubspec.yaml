@@ -32,7 +32,9 @@ dependencies:
   # ── Live consultations ───────────────────────────────────────────────────
   # Video calls use the same WebRTC handshake as the web client, signalled
   # through /api/consultations/<id>/call.
-  flutter_webrtc: ^0.11.7
+  # 0.11.x still registers through PluginRegistry.Registrar, the v1 Android
+  # embedding Flutter has since removed — its Java sources no longer compile.
+  flutter_webrtc: ^1.0.0
   permission_handler: ^11.3.1
 
   # ── Location (city detection + "lawyers near me" distance filter) ────────
@@ -49,6 +51,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+
+  # Used only by test/router_test.dart, to stand in for the platform channels
+  # the router's dependencies would otherwise reach for.
+  path_provider_platform_interface: ^2.1.2
+  plugin_platform_interface: ^2.1.8
 
 flutter:
   uses-material-design: true

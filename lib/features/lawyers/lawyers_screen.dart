@@ -239,7 +239,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
                 ),
                 const SizedBox(height: 10),
                 _sortChips(),
-                if (_query.hasFilters || location.hasCity) ...
+                if (_query.hasFilters || location.hasCity) ...[
                   const SizedBox(height: 10),
                   SizedBox(
                     height: 34,

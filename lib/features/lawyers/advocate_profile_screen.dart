@@ -222,9 +222,9 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
           ? null
           : FlexibleSpaceBar(
               background: RemoteImage(
-                imageUrl: cover,
+                source: cover,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => Container(color: AppColors.muted),
+                fallback: Container(color: AppColors.muted),
               ),
             ),
     );
