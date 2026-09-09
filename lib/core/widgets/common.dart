@@ -1,0 +1,562 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
+import '../config/app_config.dart';
+import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
+
+/// A lawyer or client photo, falling back to their initial.
+///
+/// Photos are stored as paths relative to the site, so a bare `/uploads/x.jpg`
+/// is resolved against the API host rather than failing silently.
+class Avatar extends StatelessWidget {
+  const Avatar({
+    super.key,
+    required this.name,
+    this.photo,
+    this.size = 44,
+    this.online,
+  });
+
+  final String name;
+  final String? photo;
+  final double size;
+
+  /// Null hides the dot entirely — "unknown" and "offline" are different
+  /// things, and a grey dot on a lawyer whose status has not loaded reads as
+  /// unavailable.
+  final bool? online;
+
+  static String resolveUrl(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('//')) return 'https:$value';
+    return '${AppConfig.baseUrl}${value.startsWith('/') ? '' : '/'}$value';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = resolveUrl(photo);
+    final avatar = Container(
+      height: size,
+      width: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.primary.withOpacity(0.10),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: url.isEmpty
+          ? Text(
+              Fmt.initial(name),
+              style: TextStyle(
+                fontSize: size * 0.38,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            )
+          : CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+              width: size,
+              height: size,
+              placeholder: (_, __) => Container(color: AppColors.muted),
+              errorWidget: (_, __, ___) => Text(
+                Fmt.initial(name),
+                style: TextStyle(
+                  fontSize: size * 0.38,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+    );
+
+    if (online == null) return avatar;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            height: size * 0.28,
+            width: size * 0.28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: online! ? AppColors.success : AppColors.inkFaint,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Five stars plus the numeric rating, as on the profile header.
+class RatingStars extends StatelessWidget {
+  const RatingStars({
+    super.key,
+    required this.rating,
+    this.reviews,
+    this.size = 15,
+    this.showValue = true,
+  });
+
+  final double rating;
+  final int? reviews;
+  final double size;
+  final bool showValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= 5; i++)
+          Icon(
+            i <= rating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: size,
+            color: i <= rating.round() ? AppColors.accent : AppColors.ink.withOpacity(0.18),
+          ),
+        if (showValue) ...[
+          const SizedBox(width: 6),
+          Text(
+            Fmt.rating(rating),
+            style: TextStyle(
+              fontSize: size * 0.85,
+              fontWeight: FontWeight.w600,
+              color: AppColors.inkStrong,
+            ),
+          ),
+        ],
+        if (reviews != null) ...[
+          const SizedBox(width: 4),
+          Text(
+            '($reviews)',
+            style: TextStyle(fontSize: size * 0.8, color: AppColors.inkFaint),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A small status pill. Colour carries meaning, so the tone is chosen from the
+/// status rather than passed in ad hoc at each call site.
+class StatusChip extends StatelessWidget {
+  const StatusChip({
+    super.key,
+    required this.label,
+    required this.tone,
+    this.icon,
+  });
+
+  final String label;
+  final ChipTone tone;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _colorsFor(tone);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.$1,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: colors.$2),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: colors.$2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  (Color, Color) _colorsFor(ChipTone tone) {
+    switch (tone) {
+      case ChipTone.success:
+        return (AppColors.successSoft, AppColors.success);
+      case ChipTone.warning:
+        return (AppColors.warningSoft, AppColors.warning);
+      case ChipTone.danger:
+        return (AppColors.dangerSoft, AppColors.danger);
+      case ChipTone.info:
+        return (AppColors.primary.withOpacity(0.08), AppColors.primary);
+      case ChipTone.neutral:
+        return (AppColors.ink.withOpacity(0.06), AppColors.inkMuted);
+    }
+  }
+}
+
+enum ChipTone { success, warning, danger, info, neutral }
+
+/// A tappable filter chip, used for practice areas, courts and languages.
+class SelectableChip extends StatelessWidget {
+  const SelectableChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.primary.withOpacity(0.09) : AppColors.surface,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: enabled ? onTap : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? AppColors.primary.withOpacity(0.55) : AppColors.border,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                const Icon(Icons.check_rounded, size: 15, color: AppColors.primary),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected
+                      ? AppColors.primary
+                      : (enabled ? AppColors.inkStrong : AppColors.inkFaint),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A titled panel — the mobile equivalent of the site's card sections.
+class SectionCard extends StatelessWidget {
+  const SectionCard({
+    super.key,
+    required this.child,
+    this.title,
+    this.subtitle,
+    this.icon,
+    this.trailing,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  final Widget child;
+  final String? title;
+  final String? subtitle;
+  final IconData? icon;
+  final Widget? trailing;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null) ...[
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title!, style: Theme.of(context).textTheme.titleLarge),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// A labelled value row, for profile details.
+class DetailRow extends StatelessWidget {
+  const DetailRow({
+    super.key,
+    required this.label,
+    required this.value,
+    this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: AppColors.inkFaint),
+            const SizedBox(width: 10),
+          ],
+          SizedBox(
+            width: 108,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 13, color: AppColors.inkMuted),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Wraps a list of chips with sensible spacing.
+class ChipWrap extends StatelessWidget {
+  const ChipWrap({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) {
+      return Text('—', style: TextStyle(color: AppColors.inkFaint));
+    }
+    return Wrap(spacing: 8, runSpacing: 8, children: children);
+  }
+}
+
+/// A read-only tag.
+class Tag extends StatelessWidget {
+  const Tag({super.key, required this.label, this.tone});
+
+  final String label;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = tone ?? AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color),
+      ),
+    );
+  }
+}
+
+/// A full-width primary button that shows its own progress, so callers never
+/// have to build a "disabled + spinner" state by hand.
+class PrimaryButton extends StatelessWidget {
+  const PrimaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.busy = false,
+    this.icon,
+    this.expand = true,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool busy;
+  final IconData? icon;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = FilledButton(
+      onPressed: busy ? null : onPressed,
+      child: busy
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
+                Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+    );
+    return expand ? SizedBox(width: double.infinity, child: button) : button;
+  }
+}
+
+/// An inline message strip — the amber "awaiting approval" note, the red
+/// "insufficient balance" warning.
+class NoticeBanner extends StatelessWidget {
+  const NoticeBanner({
+    super.key,
+    required this.message,
+    this.tone = ChipTone.info,
+    this.icon,
+    this.action,
+  });
+
+  final String message;
+  final ChipTone tone;
+  final IconData? icon;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    late final Color bg;
+    late final Color fg;
+    switch (tone) {
+      case ChipTone.success:
+        bg = AppColors.successSoft;
+        fg = AppColors.success;
+      case ChipTone.warning:
+        bg = AppColors.warningSoft;
+        fg = AppColors.warning;
+      case ChipTone.danger:
+        bg = AppColors.dangerSoft;
+        fg = AppColors.danger;
+      case ChipTone.info:
+        bg = AppColors.primary.withOpacity(0.06);
+        fg = AppColors.primary;
+      case ChipTone.neutral:
+        bg = AppColors.ink.withOpacity(0.05);
+        fg = AppColors.inkMuted;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: fg.withOpacity(0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon ?? Icons.info_outline_rounded, size: 18, color: fg),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, height: 1.45, color: fg),
+            ),
+          ),
+          if (action != null) ...[const SizedBox(width: 8), action!],
+        ],
+      ),
+    );
+  }
+}
+
+/// A Material icon for a practice area, chosen by its slug.
+///
+/// The website draws these from a React component stored on each category,
+/// which cannot be serialised and would mean nothing here — so `/api/services`
+/// deliberately does not send one and the mapping lives on this side instead.
+///
+/// Matching is on the slug rather than the display name because a slug is the
+/// stable half: a category can be renamed on the web without its URL changing,
+/// and an icon that survives a rename is worth more than one that reads nicely
+/// in this table. Anything unrecognised — a practice area added after this
+/// build — gets the gavel, which is at least true of all of them.
+IconData serviceIcon(String slug) {
+  switch (slug) {
+    case 'civil-lawyer':
+      return Icons.account_balance_outlined;
+    case 'criminal-lawyer':
+      return Icons.gavel_rounded;
+    case 'family-lawyer':
+      return Icons.family_restroom_rounded;
+    case 'property-lawyer':
+      return Icons.home_work_outlined;
+    case 'corporate-lawyer':
+      return Icons.business_center_outlined;
+    case 'tax-lawyer':
+      return Icons.receipt_long_outlined;
+    case 'labour-lawyer':
+      return Icons.engineering_outlined;
+    case 'constitutional-lawyer':
+      return Icons.menu_book_rounded;
+    case 'consumer-lawyer':
+      return Icons.shopping_bag_outlined;
+    case 'intellectual-property-lawyer':
+      return Icons.lightbulb_outline_rounded;
+    case 'real-estate-lawyer':
+      return Icons.apartment_rounded;
+    case 'immigration-lawyer':
+      return Icons.flight_takeoff_rounded;
+    default:
+      return Icons.gavel_rounded;
+  }
+}
