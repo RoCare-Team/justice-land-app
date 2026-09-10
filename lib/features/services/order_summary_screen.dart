@@ -137,11 +137,27 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   children: [
                     _serviceRow(service),
                     const SizedBox(height: 16),
-                    if (!auth.isUser) ...[
+                    // Three different situations, and they used to be one
+                    // error screen. A visitor needs a sign-in link; a lawyer
+                    // needs telling that ordering takes a client account,
+                    // because signing in again as themselves will not help;
+                    // a client needs nothing here at all.
+                    if (auth.isAdvocate) ...[
+                      const NoticeBanner(
+                        message:
+                            'You are signed in as a lawyer. Legal services are '
+                            'bought from a client account — sign out and sign in '
+                            'with a client number to order this.',
+                        tone: ChipTone.warning,
+                        icon: Icons.info_outline_rounded,
+                      ),
+                      const SizedBox(height: 16),
+                    ] else if (!auth.isUser) ...[
                       NoticeBanner(
                         message:
-                            'Sign in to place this order. Your details and wallet balance come with your account.',
-                        tone: ChipTone.warning,
+                            'Sign in to place this order. Your details and wallet '
+                            'balance come with your account.',
+                        tone: ChipTone.info,
                         icon: Icons.lock_outline_rounded,
                         action: TextButton(
                           onPressed: () => context.push(
@@ -152,16 +168,22 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    _addressCard(),
-                    const SizedBox(height: 16),
+                    // No point collecting an address from someone who cannot
+                    // order yet — and nowhere to save it to.
+                    if (auth.isUser) ...[
+                      _addressCard(),
+                      const SizedBox(height: 16),
+                    ],
                     _couponCard(quote),
                     const SizedBox(height: 16),
                     if (auth.isUser) ...[
                       _walletCard(quote),
                       const SizedBox(height: 16),
                     ],
-                    _notesCard(),
-                    const SizedBox(height: 16),
+                    if (auth.isUser) ...[
+                      _notesCard(),
+                      const SizedBox(height: 16),
+                    ],
                     _breakdown(quote),
                   ],
                 ),
@@ -676,6 +698,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     MarketplaceController market,
     AuthController auth,
   ) {
+    // Signed out there is no wallet, so the payable total is the whole bill;
+    // `razorpayAmount` already equals it, but naming the intent keeps the bar
+    // honest if that ever stops being true.
     final due = quote.amounts.razorpayAmount;
     final walletOnly = due <= 0 && quote.amounts.walletUsed > 0;
 
@@ -719,10 +744,23 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: PrimaryButton(
-                label: walletOnly ? 'Confirm order' : 'Pay securely',
+                label: auth.isAdvocate
+                    ? 'Client account needed'
+                    : !auth.isUser
+                        ? 'Sign in to order'
+                        : walletOnly
+                            ? 'Confirm order'
+                            : 'Pay securely',
                 busy: market.placing,
-                icon: Icons.lock_rounded,
-                onPressed: auth.isUser ? _placeOrder : _signIn,
+                icon: auth.isAdvocate ? null : Icons.lock_rounded,
+                // Disabled rather than hidden: the price above is real and the
+                // button explains what is missing. A lawyer tapping it would
+                // only be sent to a sign-in they have already completed.
+                onPressed: auth.isAdvocate
+                    ? null
+                    : auth.isUser
+                        ? _placeOrder
+                        : _signIn,
               ),
             ),
           ],

@@ -22,6 +22,11 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
 
+    // A signed-in lawyer used to land on the signed-out screen and be asked to
+    // sign in — which they had just done. Their account is an Advocate, not a
+    // User, and `isUser` is false for them; the fix is their own view, not a
+    // looser check.
+    if (auth.isAdvocate) return const _AdvocateProfile();
     if (!auth.isUser) return const _SignedOutProfile();
 
     final user = auth.user!;
@@ -312,6 +317,148 @@ class _Row extends StatelessWidget {
               Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.inkFaint),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The Profile tab for a signed-in lawyer.
+///
+/// Their account is not a client account: there is no wallet to top up and no
+/// anonymity switch, because neither exists on an Advocate. What a lawyer
+/// wants from this tab is their own listing, the profile editor, and the way
+/// out — so that is what it holds.
+class _AdvocateProfile extends StatelessWidget {
+  const _AdvocateProfile();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthController>();
+    final advocate = auth.advocate;
+
+    if (advocate == null) {
+      // Signed in as a lawyer but the record has not arrived yet.
+      return Scaffold(
+        appBar: AppBar(title: const Text('Profile')),
+        body: const LoadingView(label: 'Loading your account…'),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        actions: [
+          IconButton(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onPressed: () => context.push('/more'),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        children: [
+          Row(
+            children: [
+              Avatar(name: advocate.name, photo: advocate.photo, size: 60),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      advocate.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Tag(label: advocate.legalCareId),
+                        const SizedBox(width: 8),
+                        Tag(
+                          label: advocate.available ? 'Online' : 'Offline',
+                          tone: advocate.available
+                              ? AppColors.success
+                              : AppColors.inkMuted,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 34),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onPressed: () => context.push('/dashboard/profile'),
+                      child: const Text('Edit Profile'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          _Rows(
+            children: [
+              _Row(
+                icon: Icons.dashboard_outlined,
+                label: 'Dashboard',
+                onTap: () => context.go('/dashboard'),
+              ),
+              _Row(
+                icon: Icons.forum_outlined,
+                label: 'My Consultations',
+                onTap: () => context.go('/consultations'),
+              ),
+              _Row(
+                icon: Icons.badge_outlined,
+                label: 'Edit my listing',
+                onTap: () => context.push('/dashboard/profile'),
+              ),
+              // Their own public page, seen the way a client sees it — the one
+              // check a lawyer actually wants before sharing the link.
+              _Row(
+                icon: Icons.visibility_outlined,
+                label: 'View my public profile',
+                onTap: () => context.push('/lawyers/${advocate.profilePath}'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _Rows(
+            children: [
+              _Row(
+                icon: Icons.article_outlined,
+                label: 'Legal Guides',
+                onTap: () => context.push('/blogs'),
+              ),
+              _Row(
+                icon: Icons.more_horiz_rounded,
+                label: 'More',
+                onTap: () => context.push('/more'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () async {
+              await context.read<AuthController>().signOut();
+              if (context.mounted) context.go('/');
+            },
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: const Text('Sign out'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: BorderSide(color: AppColors.danger.withOpacity(0.35)),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -222,10 +222,19 @@ class ServiceQuote {
     required this.coupon,
     required this.couponError,
     required this.walletBalance,
+    required this.canOrder,
   });
 
   final OrderAmounts amounts;
   final AppliedCoupon? coupon;
+
+  /// Whether the session behind this quote could actually place the order.
+  ///
+  /// A price is public, so anyone can see one — a visitor with no account and
+  /// a signed-in lawyer both get a full breakdown. Only a client account can
+  /// buy, and the screen needs to know which of those it is looking at to say
+  /// the right thing rather than showing an error.
+  final bool canOrder;
 
   /// Why a code was refused. The rest of the quote is still valid — the server
   /// prices the order without the coupon rather than refusing to price it.
@@ -240,6 +249,7 @@ class ServiceQuote {
       coupon: coupon.isEmpty ? null : AppliedCoupon.fromJson(coupon),
       couponError: J.str(j['couponError']),
       walletBalance: J.int$(j['walletBalance']),
+      canOrder: J.flag(j['canOrder']),
     );
   }
 }

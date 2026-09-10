@@ -29,6 +29,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Advocate> _featured = [];
   NearbyAdvocates _nearby = NearbyAdvocates.empty;
+
+  /// The best-rated lawyers in the country, whatever the visitor's city.
+  ///
+  /// A separate band from [_featured] on purpose. Those two answer different
+  /// questions — "who is near me" and "who is the best" — and merging them
+  /// meant that in a city with no lawyers yet the local heading quietly became
+  /// a national list, so the reader was told they were seeing Gurgaon.
+  List<Advocate> _topRated = [];
   List<Testimonial> _testimonials = [];
 
   /// The practice areas, from the server. Empty until they land, and the grid
@@ -114,6 +122,26 @@ class _HomeScreenState extends State<HomeScreen> {
       content.services().then((list) {
         if (mounted) setState(() => _services = list);
       }).catchError((Object _) {});
+
+      // Also an extra: the local band is the page, and this one is a bonus
+      // below it that must not be able to blank anything if it fails.
+      advocates
+          .search(const AdvocateQuery(sort: 'rating', perPage: 5))
+          .then((page) {
+        if (!mounted) return;
+        setState(() {
+          // Anyone already shown above is dropped, so the same lawyer does not
+          // appear twice on one screen under two different headings.
+          final shown = result.advocates.map((a) => a.id).toSet();
+          _topRated =
+              page.advocates.where((a) => !shown.contains(a.id)).toList();
+        });
+        advocates
+            .onlineAmong(_topRated.map((a) => a.id).toList())
+            .then((online) {
+          if (mounted) setState(() => _online = {..._online, ...online});
+        }).catchError((Object _) {});
+      }).catchError((Object _) {});
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -144,11 +172,13 @@ class _HomeScreenState extends State<HomeScreen> {
               sliver: SliverList.list(
                 children: [
                   _categoryStrip(),
-                  const SizedBox(height: 18),
-                  _servicesBanner(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   _featuredSection(location),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 26),
+                  if (_topRated.isNotEmpty) ...[
+                    _topRatedSection(),
+                    const SizedBox(height: 26),
+                  ],
                   if (_testimonials.isNotEmpty) ...[
                     _testimonialsSection(),
                     const SizedBox(height: 20),
@@ -402,12 +432,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         child: SizedBox(
-          height: 72,
+          height: 78,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            // 14 each side and 14 between, so the gap at the card's edge
+            // matches the gap between tiles. At 12-and-6 the first tile sat
+            // twice as far from the edge as its neighbour sat from it, which
+            // is what made the row look unevenly spaced.
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             itemCount: count,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
             itemBuilder: (context, i) {
               // The last tile is "More" rather than a ninth area — a strip
               // that simply stops leaves the reader unsure whether that was
@@ -423,7 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final service = services[i];
               return _categoryChip(
                 icon: _iconForSlug(service.slug),
-                label: service.name.split(' ').first,
+                label: _shortArea(service.name),
                 tint: _tints[i % _tints.length],
                 onTap: () => context.go(
                   '/lawyers?service=${Uri.encodeQueryComponent(service.name)}',
@@ -443,7 +477,10 @@ class _HomeScreenState extends State<HomeScreen> {
     required VoidCallback onTap,
   }) {
     return SizedBox(
-      width: 64,
+      // Wide enough for "Corporate" and "Property" at this size. At 64 they
+      // ellipsised to "Corpora…", which reads as a truncation bug rather than
+      // a category.
+      width: 72,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
@@ -462,11 +499,12 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 6),
             Text(
               label,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,
+                height: 1.15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.ink.withValues(alpha: 0.75),
               ),
@@ -496,6 +534,20 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The icon does not travel from the server — on the website a category
   /// carries a React component — so each is matched by slug here, and anything
   /// unrecognised falls back to the gavel rather than to a blank circle.
+  /// A practice area's name, trimmed of the word that adds nothing.
+  ///
+  /// "Criminal Law" and "Family Law" are Criminal and Family on a 72px tile —
+  /// every area is a law, so the word carries no information here. Anything
+  /// that is not "<something> Law" keeps its full name across two lines rather
+  /// than being cut to its first word.
+  String _shortArea(String name) {
+    final trimmed = name.trim();
+    if (trimmed.toLowerCase().endsWith(' law')) {
+      return trimmed.substring(0, trimmed.length - 4);
+    }
+    return trimmed;
+  }
+
   IconData _iconForSlug(String slug) {
     if (slug.contains('criminal')) return Icons.gavel_rounded;
     if (slug.contains('propert') || slug.contains('real-estate')) {
@@ -525,6 +577,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// follows. A heading that says "in Gurugram" over lawyers from three states
   /// along is worse than one that never named the city: the reader believes
   /// it, calls one of them, and finds out the hard way.
+  /// What the band above the list is actually showing.
+  ///
+  /// When the server fell back to the whole directory the heading must stop
+  /// naming a place. It used to keep saying "Lawyers in Gurgaon" over a
+  /// national list in one branch and drop to a bare "Verified lawyers" in
+  /// another, so the reader either believed a false claim or lost the city
+  /// entirely; now the heading says the country and the line under it says why.
   String _featuredTitle(LocationController location) {
     switch (_nearby.scope) {
       case 'city':
@@ -535,68 +594,49 @@ class _HomeScreenState extends State<HomeScreen> {
             ? 'Lawyers near you'
             : 'Lawyers near ${location.label}';
       default:
-        return 'Verified lawyers';
+        return location.hasCity
+            ? 'Lawyers across India'
+            : 'Verified lawyers';
     }
   }
 
-  /// The way into the fixed-price catalogue.
-  ///
-  /// A banner rather than another row of tiles: what it is selling is not a
-  /// category but a different way of buying — a known job at a known price,
-  /// as against a lawyer billed for their time — and that distinction needs a
-  /// sentence, which a 64-pixel tile cannot carry.
-  Widget _servicesBanner() {
-    return Material(
-      color: AppColors.primary,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => context.go('/services'),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.workspace_premium_rounded,
-                    size: 22, color: AppColors.accent),
+  /// The best-rated in the country — the same people the Top Lawyers tab opens
+  /// on, so the two agree.
+  Widget _topRatedSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Top lawyers',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Legal Services',
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Company registration, trademarks, agreements — at a fixed price.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        color: Colors.white.withValues(alpha: 0.72),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded,
-                  color: Colors.white.withValues(alpha: 0.8)),
-            ],
+            ),
+            TextButton(
+              onPressed: () => context.go('/lawyers?sort=rating'),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
+        Text(
+          'Highest rated across India',
+          style: TextStyle(
+            fontSize: 12.5,
+            color: AppColors.ink.withValues(alpha: 0.55),
           ),
         ),
-      ),
+        const SizedBox(height: 12),
+        for (final advocate in _topRated.take(3))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: AdvocateCard(
+              advocate: advocate,
+              online: _online.isEmpty ? null : _online.contains(advocate.id),
+            ),
+          ),
+      ],
     );
   }
 

@@ -22,75 +22,116 @@ class RoleSelectionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.muted,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 8),
-              Text(
-                'Welcome to',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.55),
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'JusticeLand',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Choose how you want to continue',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.5),
-                    ),
-              ),
-              const SizedBox(height: 32),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Full height where there is room, scrollable where there is not,
+            // so the Login line sits at the bottom on a tall phone and is
+            // still reachable on a short one instead of being pushed off.
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Welcome to',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: AppColors.ink.withValues(alpha: 0.55),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'JusticeLand',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Choose how you want to continue',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: AppColors.ink.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        const SizedBox(height: 36),
 
-              _RoleCard(
-                icon: Icons.person_search_rounded,
-                title: 'I am a User',
-                blurb: 'Get legal help from verified lawyers',
-                onTap: () => context.go('/'),
-              ),
-              const SizedBox(height: 14),
-              _RoleCard(
-                icon: Icons.gavel_rounded,
-                title: 'I am a Lawyer',
-                blurb: 'Join as a lawyer and help people',
-                onTap: () => context.go('/advocate/register'),
-              ),
+                        _RoleCard(
+                          art: const _RoleArt(
+                            tint: AppColors.primary,
+                            badge: Icons.search_rounded,
+                          ),
+                          title: 'I am a User',
+                          blurb: 'Get legal help from verified lawyers',
+                          // Straight to the directory. The listing is public,
+                          // and asking for a number before showing anything is
+                          // how you lose someone who came to look first.
+                          onTap: () => context.go('/'),
+                        ),
+                        const SizedBox(height: 16),
+                        _RoleCard(
+                          art: const _RoleArt(
+                            tint: AppColors.accent,
+                            badge: Icons.gavel_rounded,
+                          ),
+                          title: 'I am a Lawyer',
+                          blurb: 'Join as a lawyer and help people',
+                          // A lawyer has nothing to see until they have a
+                          // profile, so this one does begin with an account.
+                          onTap: () => context.go('/advocate/register'),
+                        ),
 
-              const Spacer(),
-              // One line, two destinations. Which login a returning visitor
-              // wants depends on which of the two they are, and the only
-              // honest way to ask that is the choice they just made — so this
-              // sends clients to theirs and says so.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Already have an account?',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      color: AppColors.ink.withValues(alpha: 0.55),
+                        const Spacer(),
+                        const SizedBox(height: 24),
+                        // One link, and it opens the client sign-in because
+                        // that is who most returning visitors are. The lawyer
+                        // door is on that screen too, under "Are you a
+                        // lawyer?", so neither choice is a dead end.
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Already have an account?',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: AppColors.ink.withValues(alpha: 0.55),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => context.push('/login'),
+                              style: TextButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 6),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Login',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => context.push('/login'),
-                    child: const Text('Log in'),
-                  ),
-                ],
+                ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -99,13 +140,13 @@ class RoleSelectionScreen extends StatelessWidget {
 
 class _RoleCard extends StatelessWidget {
   const _RoleCard({
-    required this.icon,
+    required this.art,
     required this.title,
     required this.blurb,
     required this.onTap,
   });
 
-  final IconData icon;
+  final Widget art;
   final String title;
   final String blurb;
   final VoidCallback onTap;
@@ -114,34 +155,26 @@ class _RoleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.ink.withValues(alpha: 0.08)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
             boxShadow: [
               BoxShadow(
                 color: AppColors.ink.withValues(alpha: 0.05),
-                blurRadius: 18,
+                blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Row(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(icon, size: 26, color: AppColors.primary),
-              ),
+              art,
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -150,12 +183,12 @@ class _RoleCard extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 16.5,
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
                       blurb,
                       style: TextStyle(
@@ -167,6 +200,7 @@ class _RoleCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Icon(
                 Icons.arrow_forward_rounded,
                 size: 20,
@@ -175,6 +209,77 @@ class _RoleCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The artwork on a role card.
+///
+/// Drawn rather than shipped as an image. The mockup shows two illustrated
+/// portraits; this project carries no illustration assets, and inventing
+/// stock photographs of people is not something the app should ship — so the
+/// art is built from the brand's own shapes, tinted navy for the client and
+/// gold for the lawyer. Swapping either for a real illustration later is a
+/// one-widget change.
+class _RoleArt extends StatelessWidget {
+  const _RoleArt({required this.tint, required this.badge});
+
+  final Color tint;
+
+  /// The mark in the corner that says which of the two this is: a magnifier
+  /// for someone looking, a gavel for someone practising.
+  final IconData badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 76,
+      height: 82,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 76,
+            height: 82,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  tint.withValues(alpha: 0.20),
+                  tint.withValues(alpha: 0.06),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          Positioned.fill(
+            child: Align(
+              alignment: const Alignment(0, 0.2),
+              child: Icon(Icons.person_rounded, size: 44, color: tint),
+            ),
+          ),
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.ink.withValues(alpha: 0.12),
+                    blurRadius: 6,
+                  ),
+                ],
+              ),
+              child: Icon(badge, size: 15, color: tint),
+            ),
+          ),
+        ],
       ),
     );
   }
