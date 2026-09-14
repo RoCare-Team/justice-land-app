@@ -158,21 +158,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.muted,
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: CustomScrollView(
+      body: HeaderStatusBand(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          // Drop the spinner clear of the band, or it turns beneath it.
+          edgeOffset: MediaQuery.paddingOf(context).top,
+          child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _navyHeader(location)),
+            // The header and the strip are one sliver because the strip is
+            // lifted onto the header's seam, and a viewport paints its first
+            // sliver *over* the ones after it — which is what let the navy
+            // panel cut the top off the category icons. As siblings in one box
+            // the later child paints last, the way the design reads.
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _navyHeader(location),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _categoryStrip(),
+                  ),
+                ],
+              ),
+            ),
 
             // Order is the whole point of this screen. A client opens it to
             // find a lawyer, so the lawyers sit directly under the category
             // strip — not third, after a hero panel and a grid of tiles.
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomGutter(context)),
               sliver: SliverList.list(
                 children: [
-                  _categoryStrip(),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 8),
                   _featuredSection(location),
                   const SizedBox(height: 26),
                   if (_topRated.isNotEmpty) ...[
@@ -189,6 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

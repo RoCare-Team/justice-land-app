@@ -12,6 +12,7 @@ import 'services/content_service.dart';
 import 'services/dashboard_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/wallet_service.dart';
+import 'features/onboarding/onboarding_screen.dart';
 import 'state/auth_controller.dart';
 import 'state/location_controller.dart';
 import 'state/marketplace_controller.dart';
@@ -32,13 +33,22 @@ Future<void> main() async {
   // session, so a request made before it loads would arrive signed out.
   final api = await ApiClient.init();
 
-  runApp(JusticelandApp(api: api));
+  // Read here rather than from the splash screen. The router leaves /splash
+  // the moment the session resolves, and that beat an async preference read
+  // started after the first frame — which is how a fresh install skipped the
+  // intro and the role choice and opened straight on the home screen.
+  final showIntro = await OnboardingScreen.isPending();
+
+  runApp(JusticelandApp(api: api, showIntro: showIntro));
 }
 
 class JusticelandApp extends StatelessWidget {
-  const JusticelandApp({super.key, required this.api});
+  const JusticelandApp({super.key, required this.api, this.showIntro = false});
 
   final ApiClient api;
+
+  /// True on a first launch, when the intro and the role choice are still owed.
+  final bool showIntro;
 
   @override
   Widget build(BuildContext context) {
@@ -78,13 +88,15 @@ class JusticelandApp extends StatelessWidget {
           update: (_, __, market) => market!,
         ),
       ],
-      child: const _App(),
+      child: _App(showIntro: showIntro),
     );
   }
 }
 
 class _App extends StatefulWidget {
-  const _App();
+  const _App({required this.showIntro});
+
+  final bool showIntro;
 
   @override
   State<_App> createState() => _AppState();
@@ -99,7 +111,7 @@ class _AppState extends State<_App> {
       title: 'Justiceland',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      routerConfig: AppRouter.build(auth),
+      routerConfig: AppRouter.build(auth, showIntro: widget.showIntro),
       builder: (context, child) {
         // Text scaling is respected but capped: past ~1.3 the live consultation
         // meters and the five-step wizard start clipping, and a clipped

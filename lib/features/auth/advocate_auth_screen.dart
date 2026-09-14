@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/states.dart';
 import '../../state/auth_controller.dart';
 
 /// How a lawyer gets into JusticeLand — the whole of it.
@@ -52,6 +54,10 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
   final _codeFields = List.generate(_otpLength, (_) => TextEditingController());
 
   String _notice = '';
+
+  /// Something went wrong after the code was accepted — shown in red, and kept
+  /// apart from [AuthController.error], which only carries request failures.
+  String _failure = '';
   int _resendIn = 0;
   Timer? _resendTimer;
 
@@ -97,6 +103,7 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
 
     setState(() {
       _step = _Step.otp;
+      _failure = '';
       _notice = resend
           ? 'A new code is on its way.'
           : 'Code sent to ••••••${_phone.text.trim().substring(6)}.';
@@ -130,14 +137,43 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
 
     if (result.registered) {
       // Known number: already signed in by that call.
-      if (mounted) Navigator.of(context).pop(true);
+      _openDashboard(
+        auth,
+        result.name.isEmpty ? 'Signed in.' : 'Welcome back, ${result.name}.',
+      );
       return;
     }
 
     setState(() {
       _step = _Step.details;
       _notice = '';
+      _failure = '';
     });
+  }
+
+  /// Where a lawyer goes once they are in.
+  ///
+  /// `go`, not a pop. Adopting the session makes the router rebuild its stack,
+  /// and popping across that rebuild left the lawyer sitting on this very form
+  /// — signed in, looking at the screen that had just signed them in. Naming
+  /// the destination is also the honest end of this flow: someone who has
+  /// verified wants their dashboard, not whichever screen sent them here.
+  void _openDashboard(AuthController auth, String greeting) {
+    if (!mounted) return;
+
+    // The dashboard is guarded on exactly this. Checking it here turns a
+    // silent bounce back to this form into something that says what happened.
+    if (!auth.isAdvocate) {
+      setState(() {
+        _failure = 'You are verified, but the session did not load. '
+            'Please try again.';
+        _notice = '';
+      });
+      return;
+    }
+
+    Toast.success(context, greeting);
+    context.go('/dashboard');
   }
 
   Future<void> _createAccount() async {
@@ -148,7 +184,7 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
       city: _city.text.trim(),
     );
     if (!mounted) return;
-    if (created != null) Navigator.of(context).pop(true);
+    if (created != null) _openDashboard(auth, 'Welcome to Justiceland.');
   }
 
   @override
@@ -171,6 +207,7 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
                     : () => setState(() {
                           _step = _step == _Step.details ? _Step.otp : _Step.phone;
                           _notice = '';
+                          _failure = '';
                         }),
               ),
         title: const Text('For lawyers'),
@@ -199,6 +236,9 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
             if (auth.error != null) ...[
               const SizedBox(height: 14),
               NoticeBanner(tone: ChipTone.danger, message: auth.error!),
+            ] else if (_failure.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              NoticeBanner(tone: ChipTone.danger, message: _failure),
             ] else if (_notice.isNotEmpty && _step == _Step.otp) ...[
               const SizedBox(height: 14),
               NoticeBanner(tone: ChipTone.success, message: _notice),

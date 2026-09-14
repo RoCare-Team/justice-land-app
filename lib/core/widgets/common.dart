@@ -3,10 +3,64 @@ import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
+
+/// Bottom padding for a scrollable that may sit under the shell's tab bar.
+///
+/// The shell Scaffold sets `extendBody`, so the tab bar floats over the body
+/// and the last row of any list would otherwise finish behind it — which is
+/// exactly where a call-to-action or the last lawyer in a page ends up.
+/// Scaffold reports the bar's height as the body's bottom padding, so reading
+/// it here clears the bar on a shell screen and the home indicator on a pushed
+/// one, without either screen having to know which it is.
+double bottomGutter(BuildContext context, [double extra = 28]) =>
+    MediaQuery.paddingOf(context).bottom + extra;
+
+/// A screen whose own coloured header runs up under the status bar.
+///
+/// Android draws every app edge to edge, so a list scrolls under the clock and
+/// the battery icon unless something stops it — which is how rows of lawyer
+/// cards ended up with the signal bars printed across their names. This lays a
+/// band the height of the status bar in the header's own colour over the top of
+/// the page: against the header it is invisible, and once the header has
+/// scrolled away it is what the rows pass behind instead of under the icons.
+class HeaderStatusBand extends StatelessWidget {
+  const HeaderStatusBand({super.key, required this.child, this.color = AppColors.primary});
+
+  final Widget child;
+
+  /// Matches the header the band sits in front of.
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // The band is the darkest thing under the status bar, so the icons on it
+      // have to be the light ones whether the header is in view or not.
+      value: SystemUiOverlayStyle.light,
+      child: Stack(
+        children: [
+          child,
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Container(
+                height: MediaQuery.paddingOf(context).top,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Any image the backend hands us, however it chose to hand it over.
 ///

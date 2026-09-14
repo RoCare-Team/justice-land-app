@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -85,6 +86,9 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           pinned: true,
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          // The theme's bars are light and ask for dark status-bar icons; this
+          // one is navy, and on it those icons are all but invisible.
+          systemOverlayStyle: SystemUiOverlayStyle.light,
           title: service.banner.isEmpty ? Text(service.title) : null,
           flexibleSpace: service.banner.isEmpty
               ? null

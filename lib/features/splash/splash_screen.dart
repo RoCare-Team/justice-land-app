@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../onboarding/onboarding_screen.dart';
 
 /// Shown while the session is being read.
 ///
@@ -10,12 +8,10 @@ import '../onboarding/onboarding_screen.dart';
 /// one moment where "we do not know yet" is the honest state — better than
 /// flashing the signed-out home screen at someone who is signed in.
 ///
-/// It is also where a first launch is noticed. The check happens here, behind a
-/// screen that is already on show, rather than as a gate in front of the app:
-/// reading a preference off disk is fast but not instant, and a gate would mean
-/// a blank frame on every cold start for the sake of a screen most people see
-/// once. If the session resolves first the router moves on by itself; if the
-/// intro is still owed, this sends them there instead.
+/// Where it goes next is not decided here. This screen used to ask whether the
+/// intro was still owed, after its own first frame, and lost that race to the
+/// session resolving — a fresh install went straight to the home screen. main()
+/// now answers the question before the app starts and the router reads it.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -24,18 +20,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _decide());
-  }
-
-  Future<void> _decide() async {
-    if (await OnboardingScreen.isPending() && mounted) {
-      context.go('/onboarding');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -44,7 +44,7 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, bottomGutter(context)),
         children: [
           Row(
             children: [
@@ -356,7 +356,7 @@ class _AdvocateProfile extends StatelessWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, bottomGutter(context)),
         children: [
           Row(
             children: [
@@ -474,7 +474,7 @@ class _SignedOutProfile extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+        padding: EdgeInsets.fromLTRB(20, 24, 20, bottomGutter(context)),
         children: [
           Container(
             height: 76,

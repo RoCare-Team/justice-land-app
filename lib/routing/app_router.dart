@@ -34,7 +34,7 @@ import '../state/auth_controller.dart';
 class AppRouter {
   const AppRouter._();
 
-  static GoRouter build(AuthController auth) {
+  static GoRouter build(AuthController auth, {bool showIntro = false}) {
     return GoRouter(
       initialLocation: '/splash',
       // Rebuilds the redirect whenever the session changes, so signing out on
@@ -45,7 +45,12 @@ class AppRouter {
 
         // Nothing is decided until the session has been read once.
         if (!auth.isResolved) return path == '/splash' ? null : '/splash';
-        if (path == '/splash') return '/';
+        // A first launch is owed the intro and the role choice. This is
+        // decided here, with a flag main() resolved before the app started,
+        // because the splash used to ask the question itself after its first
+        // frame and the session often resolved first — sending a brand-new
+        // install straight to the home screen.
+        if (path == '/splash') return showIntro ? '/onboarding' : '/';
 
         // The intro and the role choice are first-launch things that show
         // themselves out; neither needs a session to be useful.
@@ -318,6 +323,9 @@ class AppShell extends StatelessWidget {
           child: SizedBox(
             height: 62,
             child: Row(
+              // Stretch so each tab is exactly as tall as the bar: the raised
+              // tab positions its circle against that height.
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (var i = 0; i < tabs.length; i++)
                   Expanded(
@@ -367,21 +375,44 @@ class AppShell extends StatelessWidget {
   Widget _raisedTab(BuildContext context, AppTab tab, bool selected) {
     return InkWell(
       onTap: () => context.go(tab.path),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      // A Stack, not a Column. The circle is 50 tall and lifted clear of the
+      // bar, and anything that claims height inside a 62px bar pushes the
+      // label off the baseline the other four labels sit on — which is what
+      // left "Top Lawyers" sitting lower than its neighbours. Here the label
+      // is laid out in exactly the skeleton a flat tab uses, so it lands on
+      // the same baseline at any text size, and the circle is painted over
+      // that skeleton rather than measured into it. `extendBody` on the
+      // Scaffold is what lets the lifted part sit over the content.
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          // Lifted clear of the bar, and claiming only the 38 pixels it
-          // actually occupies inside it. Charging the bar for all 50 pushed the
-          // label past the bar's bottom edge — by 3px at normal text size, and
-          // further as the label grows. `extendBody` on the Scaffold is what
-          // lets the lifted part sit over the content rather than being
-          // clipped by it.
-          SizedBox(
-            height: 38,
-            child: OverflowBox(
-              minHeight: 50,
-              maxHeight: 50,
-              alignment: Alignment.bottomCenter,
+          Positioned.fill(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // The slot a flat tab gives its icon, left empty here.
+                const SizedBox(height: 22),
+                const SizedBox(height: 3),
+                Text(
+                  tab.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected
+                        ? AppColors.primary
+                        : AppColors.ink.withValues(alpha: 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: -12,
+            left: 0,
+            right: 0,
+            child: Center(
               child: Container(
                 width: 50,
                 height: 50,
@@ -399,19 +430,6 @@ class AppShell extends StatelessWidget {
                 ),
                 child: Icon(tab.active, size: 23, color: AppColors.primaryDark),
               ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            tab.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-              color: selected
-                  ? AppColors.primary
-                  : AppColors.ink.withValues(alpha: 0.55),
             ),
           ),
         ],

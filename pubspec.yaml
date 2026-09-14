@@ -10,6 +10,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Material's adaptive widgets (Switch.adaptive, SwitchListTile.adaptive) reach
+  # for Cupertino glyphs, and without the font the release build warns and those
+  # icons render as empty boxes.
+  cupertino_icons: ^1.0.8
+
   # ── Networking ───────────────────────────────────────────────────────────
   # The web app authenticates with an httpOnly cookie (lci_token). Dio plus a
   # persisted cookie jar reproduces that exactly: the server keeps issuing the
@@ -56,6 +61,24 @@ dev_dependencies:
   # the router's dependencies would otherwise reach for.
   path_provider_platform_interface: ^2.1.2
   plugin_platform_interface: ^2.1.8
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/
+
+# Launcher icons, generated with `dart run flutter_launcher_icons`.
+#
+# The mark is the navy book and gold scales the brand uses everywhere else. The
+# adaptive foreground is the same artwork inset further, because Android masks
+# the icon to a circle or a squircle and the unpadded version loses the outer
+# edges of the book to that mask.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/app_icon.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  remove_alpha_ios: true

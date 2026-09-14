@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -177,25 +176,36 @@ class AdvocateCard extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Flexible(
-              child: Text(
-                advocate.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
+            // Name and badge share one flexible slot, with the save button
+            // outside it. They used to be a Flexible beside a Spacer, and two
+            // flex children of equal weight split the free space evenly — so a
+            // name ellipsised at half the card's width while the other half
+            // sat empty.
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Text(
+                      advocate.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  if (advocate.verified)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, top: 2),
+                      child: Icon(Icons.verified_rounded,
+                          size: 15, color: AppColors.primary),
+                    ),
+                ],
               ),
             ),
-            if (advocate.verified)
-              const Padding(
-                padding: EdgeInsets.only(left: 4, top: 2),
-                child: Icon(Icons.verified_rounded,
-                    size: 15, color: AppColors.primary),
-              ),
-            const Spacer(),
             SizedBox(
               width: 26,
               height: 22,

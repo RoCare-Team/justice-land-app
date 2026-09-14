@@ -325,7 +325,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         await Future.wait([_loadInbox(), _loadHistory(), _loadEnquiries()]);
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomGutter(context)),
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -367,6 +367,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             crossAxisCount: 4,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            // Without this the nested grid adopts the ambient MediaQuery
+            // padding and opens a status-bar-sized gap above its first row.
+            padding: EdgeInsets.zero,
             childAspectRatio: 0.86,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
@@ -556,7 +559,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return RefreshIndicator(
       onRefresh: _loadInbox,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomGutter(context)),
         itemCount: _inbox.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, i) => _requestCard(_inbox[i]),
@@ -703,7 +706,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return RefreshIndicator(
       onRefresh: _loadHistory,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomGutter(context)),
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -789,7 +792,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return RefreshIndicator(
       onRefresh: _loadEnquiries,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomGutter(context)),
         itemCount: _enquiries.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, i) => _enquiryCard(_enquiries[i]),
@@ -888,7 +891,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final advocate = context.watch<AuthController>().advocate!;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomGutter(context)),
       children: [
         Row(
           children: [

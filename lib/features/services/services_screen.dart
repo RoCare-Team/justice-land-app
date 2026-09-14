@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/common.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/states.dart';
 import '../../state/marketplace_controller.dart';
@@ -47,9 +48,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.muted,
-      body: RefreshIndicator(
-        onRefresh: () => market.load(silent: true),
-        child: CustomScrollView(
+      body: HeaderStatusBand(
+        child: RefreshIndicator(
+          onRefresh: () => market.load(silent: true),
+          // Drop the spinner clear of the band, or it turns beneath it.
+          edgeOffset: MediaQuery.paddingOf(context).top,
+          child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _header()),
             if (market.loading && market.allServices.isEmpty)
@@ -64,11 +68,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+                padding: EdgeInsets.fromLTRB(16, 20, 16, bottomGutter(context)),
                 sliver: SliverList.list(children: _sections(market)),
               ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -230,6 +235,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      // A scroll view with no padding of its own adopts the ambient MediaQuery
+      // padding — for a nested grid that meant the status bar's height above
+      // the first row and the tab bar's below the last, as two bands of empty
+      // page in the middle of the list.
+      padding: EdgeInsets.zero,
       itemCount: categories.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,

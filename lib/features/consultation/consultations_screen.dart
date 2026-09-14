@@ -215,7 +215,7 @@ class _ConsultationsScreenState extends State<ConsultationsScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomGutter(context)),
         itemCount: rows.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (_, i) => ConsultationTile(session: rows[i]),

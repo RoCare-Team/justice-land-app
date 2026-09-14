@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
 import '../../models/advocate.dart';
 import '../../services/advocate_service.dart';
@@ -190,7 +191,10 @@ class _LawyersScreenState extends State<LawyersScreen> {
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        titleSpacing: 0,
+        // 16 to sit on the same left edge as the search field and the cards
+        // below it. At 0 — and this tab has no back button to take up the slack
+        // — the heading ran flush into the screen's edge.
+        titleSpacing: 16,
         // Two lines, because the title is the answer to "which lawyers am I
         // looking at" and that answer is two facts — the practice area and the
         // place. Squeezing them onto one line truncates the city, which is the
@@ -537,7 +541,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
       onRefresh: _load,
       child: ListView.separated(
         controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, bottomGutter(context)),
         itemCount: _advocates.length + (_loadingMore ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, index) {

@@ -68,6 +68,7 @@ class RoleSelectionScreen extends StatelessWidget {
 
                         _RoleCard(
                           art: const _RoleArt(
+                            image: 'assets/images/role_user.jpg',
                             tint: AppColors.primary,
                             badge: Icons.search_rounded,
                           ),
@@ -81,6 +82,7 @@ class RoleSelectionScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         _RoleCard(
                           art: const _RoleArt(
+                            image: 'assets/images/role_lawyer.jpg',
                             tint: AppColors.accent,
                             badge: Icons.gavel_rounded,
                           ),
@@ -223,7 +225,15 @@ class _RoleCard extends StatelessWidget {
 /// gold for the lawyer. Swapping either for a real illustration later is a
 /// one-widget change.
 class _RoleArt extends StatelessWidget {
-  const _RoleArt({required this.tint, required this.badge});
+  const _RoleArt({
+    required this.image,
+    required this.tint,
+    required this.badge,
+  });
+
+  /// The portrait for this role. A drawn face says "this one is you" far
+  /// faster than a person glyph, which is the same silhouette on both cards.
+  final String image;
 
   final Color tint;
 
@@ -255,9 +265,19 @@ class _RoleArt extends StatelessWidget {
             ),
           ),
           Positioned.fill(
-            child: Align(
-              alignment: const Alignment(0, 0.2),
-              child: Icon(Icons.person_rounded, size: 44, color: tint),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.asset(
+                image,
+                fit: BoxFit.cover,
+                // The heads sit high in both drawings; centring the crop cuts
+                // the tops off at this size.
+                alignment: Alignment.topCenter,
+                // A missing asset should cost the card its picture, not the
+                // screen someone has to get past to use the app.
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.person_rounded, size: 44, color: tint),
+              ),
             ),
           ),
           Positioned(
