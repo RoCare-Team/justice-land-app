@@ -173,7 +173,8 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
     }
 
     Toast.success(context, greeting);
-    context.go('/dashboard');
+    // The lawyer app's home — the router keeps a lawyer inside it from here on.
+    context.go('/lawyer');
   }
 
   Future<void> _createAccount() async {

@@ -311,10 +311,13 @@ class EndedPanel extends StatelessWidget {
       _ => (
           Icons.check_circle_outline_rounded,
           'Consultation ended',
-          session.price > 0
-              ? 'Billed ${Fmt.money(session.price)} for '
-                  '${Fmt.pluralize(session.minutes, 'minute')}.'
-              : 'Nothing was charged for this session.',
+          session.price <= 0
+              ? 'Nothing was charged for this session.'
+              : viewerIsAdvocate
+                  ? 'You earned ${Fmt.money(session.price)} for '
+                      '${Fmt.pluralize(session.minutes, 'minute')}. It is credited to your wallet.'
+                  : 'Billed ${Fmt.money(session.price)} for '
+                      '${Fmt.pluralize(session.minutes, 'minute')}.',
         ),
     };
 
@@ -356,18 +359,21 @@ class EndedPanel extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () => context.go('/dashboard'),
-                child: const Text('Back to dashboard'),
+                onPressed: () => context.go('/lawyer'),
+                child: const Text('Back to home'),
               ),
             ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => context.go('/'),
-              child: const Text('Home'),
+          // A lawyer's home is the button above; the client home is not theirs.
+          if (!viewerIsAdvocate) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => context.go('/'),
+                child: const Text('Home'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

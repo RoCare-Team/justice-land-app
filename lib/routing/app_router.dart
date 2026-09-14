@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
 import '../core/widgets/states.dart';
@@ -14,9 +13,9 @@ import '../features/consultation/chat_screen.dart';
 import '../features/consultation/consultations_screen.dart';
 import '../features/consultation/video_call_screen.dart';
 import '../features/content/content_screens.dart';
-import '../features/dashboard/dashboard_screen.dart';
 import '../features/dashboard/edit_profile_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/lawyer/lawyer_routes.dart';
 import '../features/lawyers/advocate_profile_screen.dart';
 import '../features/lawyers/lawyers_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -34,6 +33,25 @@ import '../state/auth_controller.dart';
 class AppRouter {
   const AppRouter._();
 
+  /// The lawyer's own screens. Matched on whole segments, because '/lawyers'
+  /// (the public directory) also starts with '/lawyer'.
+  static bool _isLawyerArea(String path) =>
+      path == '/lawyer' ||
+      path.startsWith('/lawyer/') ||
+      path == '/dashboard' ||
+      path.startsWith('/dashboard/');
+
+  /// Where a signed-in lawyer is allowed to be: their app, a live session,
+  /// the profile editor, and the reading pages they can reach from Settings.
+  static bool _lawyerMayOpen(String path) =>
+      path == '/lawyer' ||
+      path.startsWith('/lawyer/') ||
+      path.startsWith('/consultation/') ||
+      path == '/dashboard/profile' ||
+      path == '/contact' ||
+      path == '/blogs' ||
+      path.startsWith('/blogs/');
+
   static GoRouter build(AuthController auth, {bool showIntro = false}) {
     return GoRouter(
       initialLocation: '/splash',
@@ -50,19 +68,28 @@ class AppRouter {
         // because the splash used to ask the question itself after its first
         // frame and the session often resolved first — sending a brand-new
         // install straight to the home screen.
-        if (path == '/splash') return showIntro ? '/onboarding' : '/';
+        if (path == '/splash') {
+          if (auth.isAdvocate) return '/lawyer';
+          return showIntro ? '/onboarding' : '/';
+        }
+
+        // A signed-in lawyer gets the lawyer app and nothing else. The client
+        // side — the directory, services, wallet, the intro — is for people
+        // looking for a lawyer, and a lawyer landing there after signing in
+        // reads as having been dropped into the wrong app. Anything outside
+        // their own screens (an old link, a notification, a stray `go('/')`)
+        // comes back to their home.
+        if (auth.isAdvocate && !_lawyerMayOpen(path)) return '/lawyer';
 
         // The intro and the role choice are first-launch things that show
         // themselves out; neither needs a session to be useful.
         if (path == '/onboarding' || path == '/role') return null;
 
-        const guardedForAdvocate = ['/dashboard'];
-
         // The consultations and wallet tabs are deliberately NOT guarded. A tab
         // that bounces to a sign-in form the moment it is touched is worse than
         // one that stays put and says what signing in would give you — each of
         // those screens does that itself.
-        if (guardedForAdvocate.any(path.startsWith) && !auth.isAdvocate) {
+        if (_isLawyerArea(path) && !auth.isAdvocate) {
           return '/advocate/login';
         }
         // A live consultation belongs to whoever is signed in; anonymous
@@ -76,6 +103,10 @@ class AppRouter {
         GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
         GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
         GoRoute(path: '/role', builder: (_, __) => const RoleSelectionScreen()),
+
+        // The lawyer app — its own tabs and screens, nothing shared with the
+        // client shell below. See lawyer_routes.dart.
+        ...lawyerRoutes,
 
         ShellRoute(
           builder: (context, state, child) => AppShell(child: child),
@@ -103,12 +134,6 @@ class AppRouter {
             ),
             GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),
             GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-            GoRoute(
-              path: '/dashboard',
-              builder: (context, state) => DashboardScreen(
-                initialTab: state.uri.queryParameters['tab'] ?? 'inbox',
-              ),
-            ),
           ],
         ),
 
@@ -227,10 +252,8 @@ typedef AppTab = ({String path, IconData icon, IconData active, String label});
 
 /// The bottom navigation the main sections share.
 ///
-/// Five slots, and the middle two are the difference between the two people who
-/// use this app. A client gets their consultations, their wallet and their
-/// profile; a lawyer gets their dashboard in place of the wallet, because a
-/// lawyer earns rather than tops up and their earnings live on the dashboard.
+/// Five slots for a client. A lawyer never sees this bar — they have the
+/// lawyer app's own (see LawyerShell).
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
 
@@ -272,16 +295,9 @@ class AppShell extends StatelessWidget {
     active: Icons.person_rounded,
     label: 'Profile',
   );
-  static const AppTab _dashboard = (
-    path: '/dashboard',
-    icon: Icons.dashboard_outlined,
-    active: Icons.dashboard_rounded,
-    label: 'Dashboard',
-  );
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthController>();
     final location = GoRouterState.of(context).uri.path;
 
     // Top Lawyers sits in the middle, in the raised gold slot, because it is
@@ -293,9 +309,9 @@ class AppShell extends StatelessWidget {
     // and giving a rarely-used destination a fifth of the bar cost the two
     // things that are used constantly. It is reached from the bell in the home
     // header and from Profile, both of which are always one tap away.
-    final List<AppTab> tabs = auth.isAdvocate
-        ? const [_home, _services, _topLawyers, _dashboard, _profile]
-        : const [_home, _services, _topLawyers, _wallet, _profile];
+    // Clients only: a signed-in lawyer is routed into the lawyer app, which
+    // has a bar of its own.
+    const List<AppTab> tabs = [_home, _services, _topLawyers, _wallet, _profile];
 
     // A route that is not itself a tab keeps the bar on Home rather than on
     // nothing; anything pushed over the shell covers the bar anyway.

@@ -14,6 +14,7 @@ import 'services/marketplace_service.dart';
 import 'services/wallet_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'state/auth_controller.dart';
+import 'state/lawyer_controller.dart';
 import 'state/location_controller.dart';
 import 'state/marketplace_controller.dart';
 import 'state/wallet_controller.dart';
@@ -86,6 +87,16 @@ class JusticelandApp extends StatelessWidget {
             context.read<AuthController>(),
           ),
           update: (_, __, market) => market!,
+        ),
+        // The lawyer workspace. Idle for clients; starts polling the moment a
+        // lawyer signs in and stops when they sign out.
+        ChangeNotifierProxyProvider<AuthController, LawyerController>(
+          create: (context) => LawyerController(
+            context.read<ConsultationService>(),
+            context.read<DashboardService>(),
+            context.read<AuthController>(),
+          ),
+          update: (_, __, lawyer) => lawyer!,
         ),
       ],
       child: _App(showIntro: showIntro),

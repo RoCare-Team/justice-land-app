@@ -20,6 +20,22 @@ class DashboardService {
     return Advocate.fromJson(J.map(map['advocate'] ?? map));
   }
 
+  /// The lawyer's earnings wallet — what paid consultations have credited.
+  ///
+  /// Read off the same profile route: for the signed-in lawyer it carries
+  /// `walletBalance` and `walletTransactions`, which the public profile strips.
+  /// There is no payout route on the server, so this is read-only.
+  Future<Wallet> earnings() async {
+    final data = await _api.get(Endpoints.dashboardProfile);
+    final map = J.map(data);
+    final advocate = J.map(map['advocate'] ?? map);
+    return Wallet(
+      balance: J.int$(advocate['walletBalance']),
+      transactions:
+          J.models(advocate['walletTransactions'], WalletTransaction.fromJson),
+    );
+  }
+
   /// Saves the profile. Only the keys present are written, matching the API's
   /// `!== undefined` checks — so a screen that edits one section cannot blank
   /// the sections it never showed.

@@ -107,6 +107,9 @@ class Consultation {
     this.advocateProfilePath = '',
     this.charged = false,
     this.resumeLeftoverSeconds = 0,
+    this.talkedMinutes = 0,
+    this.messagesCount = 0,
+    this.lastMessage,
   });
 
   final String id;
@@ -150,6 +153,18 @@ class Consultation {
   final String advocateProfilePath;
   final bool charged;
   final int resumeLeftoverSeconds;
+
+  /// Minutes the two actually spent connected (history rows only).
+  final int talkedMinutes;
+
+  /// How many chat lines the session holds, and the latest of them — what the
+  /// lawyer's Messages list previews without loading every transcript.
+  final int messagesCount;
+  final ChatMessage? lastMessage;
+
+  /// When this session counts as having happened: the clock start, else the
+  /// booking. Earnings and "today" are counted on this.
+  DateTime? get happenedAt => startedAt ?? createdAt;
 
   bool get isChat => type == ConsultationType.chat;
   bool get isVideo => type == ConsultationType.video;
@@ -206,6 +221,13 @@ class Consultation {
         advocateProfilePath: J.str(j['advocateProfilePath']),
         charged: J.flag(j['charged']),
         resumeLeftoverSeconds: J.int$(j['resumeLeftoverSeconds']),
+        talkedMinutes: J.int$(j['talkedMinutes']),
+        messagesCount: j['messagesCount'] != null
+            ? J.int$(j['messagesCount'])
+            : J.mapList(j['messages']).length,
+        lastMessage: j['lastMessage'] is Map
+            ? ChatMessage.fromJson(J.map(j['lastMessage']))
+            : null,
       );
 }
 

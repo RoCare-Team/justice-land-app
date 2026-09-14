@@ -22,6 +22,7 @@ import 'package:flutter_legal_care/services/dashboard_service.dart';
 import 'package:flutter_legal_care/services/marketplace_service.dart';
 import 'package:flutter_legal_care/services/wallet_service.dart';
 import 'package:flutter_legal_care/state/auth_controller.dart';
+import 'package:flutter_legal_care/state/lawyer_controller.dart';
 import 'package:flutter_legal_care/state/location_controller.dart';
 import 'package:flutter_legal_care/state/marketplace_controller.dart';
 import 'package:flutter_legal_care/state/wallet_controller.dart';
@@ -102,6 +103,14 @@ Widget _app(ApiClient api, AuthController auth) => MultiProvider(
           ),
           update: (_, __, market) => market!,
         ),
+        ChangeNotifierProxyProvider<AuthController, LawyerController>(
+          create: (context) => LawyerController(
+            context.read<ConsultationService>(),
+            context.read<DashboardService>(),
+            context.read<AuthController>(),
+          ),
+          update: (_, __, lawyer) => lawyer!,
+        ),
       ],
       child: MaterialApp.router(routerConfig: AppRouter.build(auth)),
     );
@@ -133,5 +142,97 @@ void main() {
     router.push('/more');
     await _settle(tester);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a signed-in lawyer gets the lawyer app, never the client side', (tester) async {
+    final now = DateTime.now().toUtc();
+    final pending = <String, dynamic>{
+      'id': 'c1', 'userId': 'u1', 'userName': 'Amit Kumar', 'advocateId': 'a1',
+      'type': 'chat', 'status': 'pending', 'rate': 10, 'maxMinutes': 30,
+      'createdAt': now.subtract(const Duration(minutes: 2)).toIso8601String(),
+    };
+    final ended = <String, dynamic>{
+      'id': 'c2', 'userId': 'u2', 'userName': 'Neha Verma', 'advocateId': 'a1',
+      'type': 'video', 'status': 'ended', 'rate': 20, 'minutes': 5, 'price': 100,
+      'charged': true, 'talkedMinutes': 5, 'messagesCount': 3,
+      'lastMessage': {'from': 'user', 'text': 'Thank you', 'at': now.toIso8601String()},
+      'startedAt': now.subtract(const Duration(hours: 1)).toIso8601String(),
+      'createdAt': now.subtract(const Duration(hours: 1)).toIso8601String(),
+    };
+    final (api, auth) = await _boot(tester, server: {
+      '/api/auth/me': <String, dynamic>{
+        'role': 'advocate',
+        'advocate': <String, dynamic>{
+          'id': 'a1', 'name': 'Adv. Test', 'status': 'published', 'chatRate': 10,
+          'officeTiming': [
+            {'day': 'Monday', 'hours': '10:00 AM - 6:00 PM', 'open': true},
+          ],
+        },
+      },
+      // The inbox and the history share this path; each reads its own key.
+      '/api/consultations': <String, dynamic>{
+        'sessions': [pending],
+        'consultations': [pending, ended],
+      },
+      '/api/dashboard/profile': <String, dynamic>{
+        'advocate': {
+          'walletBalance': 100,
+          'walletTransactions': [
+            {'type': 'credit', 'amount': 100, 'note': '5 min video consultation', 'createdAt': now.toIso8601String()},
+          ],
+        },
+      },
+    });
+    expect(auth.isAdvocate, isTrue);
+
+    await tester.pumpWidget(_app(api, auth));
+    await _settle(tester);
+
+    final router = GoRouter.of(tester.element(find.byType(Navigator).first));
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/lawyer');
+
+    // The directory and the client home both send a lawyer back home.
+    for (final path in ['/lawyers', '/', '/services', '/wallet']) {
+      router.go(path);
+      await _settle(tester);
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/lawyer', reason: path);
+    }
+
+    // Every lawyer screen opens and lays out without throwing.
+    for (final path in [
+      '/lawyer/requests',
+      '/lawyer/consultations',
+      '/lawyer/messages',
+      '/lawyer/profile',
+      '/lawyer/earnings',
+      '/lawyer/availability',
+      '/lawyer/notifications',
+      '/lawyer/settings',
+      '/lawyer/client/u1',
+      '/lawyer/client/u2',
+      '/lawyer/transcript/c2',
+      '/lawyer',
+    ]) {
+      router.go(path);
+      await _settle(tester);
+      expect(router.routerDelegate.currentConfiguration.uri.path, path, reason: path);
+      expect(tester.takeException(), isNull, reason: path);
+    }
+
+    // A request that arrives while the lawyer is on Home rings: the sheet opens.
+    final fresh = {...pending, 'id': 'c3', 'userId': 'u3', 'userName': 'Rohit Mehta'};
+    api.raw.httpClientAdapter = _StubAdapter({
+      '/api/auth/me': {'role': 'advocate', 'advocate': {'id': 'a1', 'name': 'Adv. Test', 'status': 'published'}},
+      '/api/consultations': {'sessions': [pending, fresh], 'consultations': [pending, ended]},
+    });
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Incoming request'), findsOneWidget);
+    expect(find.text('Rohit Mehta'), findsWidgets);
+    expect(tester.takeException(), isNull);
+
+    // Unmount so the workspace's poll timers are cancelled before the test ends.
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }
