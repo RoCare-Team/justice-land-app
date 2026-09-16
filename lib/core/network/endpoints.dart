@@ -208,6 +208,26 @@ class Endpoints {
   /// PATCH { status } — 'new' | 'pending' | 'confirmed' | 'declined'
   static String enquiry(String id) => '/api/enquiries/$id';
 
+  // ── Client queries ("Ask a lawyer") ──────────────────────────────────────
+  //
+  // A legal problem posted by anyone — no account needed — into a pool every
+  // lawyer on a paid plan can see. The first lawyer to take one spends a query
+  // credit, gets the client's contact details, and it leaves everyone else's
+  // list; once resolved it leaves the pool for good.
+
+  /// POST { name, phone, email?, category?, city?, message } → 201 { ok, id }
+  /// 400 validation · 429 too many questions from this number / network.
+  static const String askQuery = '/api/queries';
+
+  /// GET ?category=&city= → { open, mine, resolved, openTotal, categories,
+  /// locked, credits: { hasPlan, planId, planName, allowance, used, left,
+  /// resetsAt } }. `locked` (no plan with credits) empties `open`.
+  static const String lawyerQueries = '/api/dashboard/queries';
+
+  /// PATCH { action: 'claim' | 'release' | 'resolve', note? } → { ok, query }
+  /// 402 code no_plan | no_credits · 409 code taken.
+  static String lawyerQuery(String id) => '/api/dashboard/queries/$id';
+
   // ── Lawyer dashboard ─────────────────────────────────────────────────────
   /// GET → the lawyer's editable profile
   /// PUT → save it · PATCH → availability toggle · DELETE → close account
@@ -219,6 +239,11 @@ class Endpoints {
   // ranks — never anything about consultations, which work identically on
   // every plan. Prices are computed server-side from the plan table; the app
   // sends a plan id and nothing else, so it cannot name its own price.
+
+  /// GET → { plans: [{ id, name, tagline, monthly, queryCredits, placement,
+  /// features, price: { base, gst, total, monthly } }], current: { planId,
+  /// planName, expiresAt, credits } | null }
+  static const String membershipPlans = '/api/membership/plans';
 
   /// POST { planId } → { orderId, amount, currency, keyId, plan, price, prefill }
   static const String membershipOrder = '/api/membership/order';

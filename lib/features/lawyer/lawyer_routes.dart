@@ -7,7 +7,9 @@ import 'lawyer_earnings_screen.dart';
 import 'lawyer_home_screen.dart';
 import 'lawyer_messages_screen.dart';
 import 'lawyer_notifications_screen.dart';
+import 'lawyer_plan_screen.dart';
 import 'lawyer_profile_screen.dart';
+import 'lawyer_queries_screen.dart';
 import 'lawyer_requests_screen.dart';
 import 'lawyer_settings_screen.dart';
 import 'lawyer_shell.dart';
@@ -34,6 +36,8 @@ final List<RouteBase> lawyerRoutes = [
   GoRoute(path: '/lawyer/availability', builder: (_, __) => const LawyerAvailabilityScreen()),
   GoRoute(path: '/lawyer/notifications', builder: (_, __) => const LawyerNotificationsScreen()),
   GoRoute(path: '/lawyer/settings', builder: (_, __) => const LawyerSettingsScreen()),
+  GoRoute(path: '/lawyer/queries', builder: (_, __) => const LawyerQueriesScreen()),
+  GoRoute(path: '/lawyer/plan', builder: (_, __) => const LawyerPlanScreen()),
   ShellRoute(
     builder: (context, state, child) => LawyerShell(child: child),
     routes: [

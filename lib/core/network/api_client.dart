@@ -138,6 +138,11 @@ class ApiClient {
       } else if (rawMessage is String && rawMessage.isNotEmpty) {
         message = rawMessage;
       }
+      // Some routes send the sentence in `error` and the machine code in a
+      // separate `code` field ({ error: 'Another lawyer just picked this up.',
+      // code: 'taken' }) — the client queries and their credits do.
+      final rawCode = data['code'];
+      if (rawCode is String && rawCode.isNotEmpty) code = rawCode;
     }
 
     if (status == 401 && message.isEmpty) {

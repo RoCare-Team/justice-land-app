@@ -14,6 +14,7 @@ import '../../services/content_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/location_controller.dart';
 import '../lawyers/advocate_card.dart';
+import '../queries/ask_lawyer_sheet.dart';
 import 'location_sheet.dart';
 
 /// The home screen — the same sections the website's homepage has, in the
@@ -191,6 +192,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const SizedBox(height: 8),
                   _featuredSection(location),
+                  const SizedBox(height: 20),
+                  // For someone who does not know which lawyer they need: say
+                  // what happened, and a lawyer calls them. No account needed.
+                  const AskLawyerBanner(),
                   const SizedBox(height: 26),
                   if (_topRated.isNotEmpty) ...[
                     _topRatedSection(),

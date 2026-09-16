@@ -12,12 +12,15 @@ import 'services/consultation_service.dart';
 import 'services/content_service.dart';
 import 'services/dashboard_service.dart';
 import 'services/marketplace_service.dart';
+import 'services/membership_service.dart';
+import 'services/query_service.dart';
 import 'services/wallet_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'state/auth_controller.dart';
 import 'state/lawyer_controller.dart';
 import 'state/location_controller.dart';
 import 'state/marketplace_controller.dart';
+import 'state/queries_controller.dart';
 import 'state/wallet_controller.dart';
 
 Future<void> main() async {
@@ -66,6 +69,8 @@ class JusticelandApp extends StatelessWidget {
         Provider(create: (_) => DashboardService(api)),
         Provider(create: (_) => ContentService(api)),
         Provider(create: (_) => MarketplaceService(api)),
+        Provider(create: (_) => QueryService(api)),
+        Provider(create: (_) => MembershipService(api)),
 
         // Controllers hold what the server last said.
         ChangeNotifierProvider(
@@ -98,6 +103,14 @@ class JusticelandApp extends StatelessWidget {
             context.read<AuthController>(),
           ),
           update: (_, __, lawyer) => lawyer!,
+        ),
+        // Client queries and credits for a signed-in lawyer; idle otherwise.
+        ChangeNotifierProxyProvider<AuthController, QueriesController>(
+          create: (context) => QueriesController(
+            context.read<QueryService>(),
+            context.read<AuthController>(),
+          ),
+          update: (_, __, queries) => queries!,
         ),
       ],
       child: _App(showIntro: showIntro),

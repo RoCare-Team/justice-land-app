@@ -119,6 +119,8 @@ class LawyerProfileScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  _link(context, Icons.inbox_outlined, 'Client Queries', '/lawyer/queries'),
+                  _link(context, Icons.workspace_premium_outlined, 'My Plan', '/lawyer/plan'),
                   _link(context, Icons.account_balance_wallet_outlined, 'Earnings', '/lawyer/earnings'),
                   _link(context, Icons.toggle_on_outlined, 'Availability', '/lawyer/availability'),
                   _link(context, Icons.notifications_none_rounded, 'Notifications', '/lawyer/notifications'),

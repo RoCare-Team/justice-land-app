@@ -9,7 +9,143 @@ import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
 import '../../state/auth_controller.dart';
 import '../../state/lawyer_controller.dart';
+import '../../state/queries_controller.dart';
 import 'lawyer_widgets.dart';
+
+/// Public legal problems waiting for a lawyer: the newest few with the credit
+/// count on a paid plan, or the waiting count and a way to unlock on Starter.
+class _ClientQueriesCard extends StatelessWidget {
+  const _ClientQueriesCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final queries = context.watch<QueriesController>();
+    final board = queries.board;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          title: 'Client Queries',
+          icon: Icons.inbox_outlined,
+          count: queries.openCount,
+          action: 'See All',
+          onAction: () => context.push('/lawyer/queries'),
+        ),
+        if (!queries.loaded)
+          const EmptyCard(icon: Icons.inbox_outlined, title: 'Loading queries…')
+        else if (board.locked)
+          LCard(
+            onTap: () => context.push('/lawyer/queries'),
+            child: Row(
+              children: [
+                Container(
+                  height: 44,
+                  width: 44,
+                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+                  child: const Icon(Icons.lock_outline_rounded, color: AppColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        board.openTotal > 0
+                            ? '${board.openTotal} ${board.openTotal == 1 ? 'client is' : 'clients are'} waiting for a lawyer'
+                            : 'Get client queries',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Professional gives 10 credits a month, Premium 25.',
+                        style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => context.push('/lawyer/plan'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: const Color(0xFF241B02),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    minimumSize: const Size(0, 38),
+                  ),
+                  child: const Text('Unlock'),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.toll_rounded, size: 16, color: AppColors.warning),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    '${board.credits.left} of ${board.credits.allowance} credits left this month',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.warning),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (board.open.isEmpty)
+            const EmptyCard(
+              icon: Icons.inbox_outlined,
+              title: 'No open queries right now',
+              message: 'Legal problems posted by clients appear here for you to take.',
+            )
+          else
+            for (final q in board.open.take(3))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: LCard(
+                  onTap: () => context.push('/lawyer/queries'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(q.message, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, height: 1.4)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          if (q.category.isNotEmpty) ...[
+                            Flexible(
+                              child: Text(
+                                q.category,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          if (q.city.isNotEmpty) ...[
+                            Icon(Icons.location_on_outlined, size: 13, color: AppColors.inkFaint),
+                            Flexible(
+                              child: Text(q.city, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: AppColors.inkFaint)),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          Icon(Icons.schedule_rounded, size: 13, color: AppColors.inkFaint),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(q.age, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: AppColors.inkFaint)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+        ],
+      ],
+    );
+  }
+}
 
 /// The lawyer's home: who they are and whether they are taking clients, what
 /// today has earned, who is waiting, and what is running right now.
@@ -119,6 +255,8 @@ class LawyerHomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: LiveSessionCard(session: s),
                     ),
+                const SizedBox(height: 18),
+                const _ClientQueriesCard(),
                 const SizedBox(height: 18),
                 const _TodaySchedule(),
                 const SizedBox(height: 18),

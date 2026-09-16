@@ -20,11 +20,14 @@ import 'package:flutter_legal_care/services/consultation_service.dart';
 import 'package:flutter_legal_care/services/content_service.dart';
 import 'package:flutter_legal_care/services/dashboard_service.dart';
 import 'package:flutter_legal_care/services/marketplace_service.dart';
+import 'package:flutter_legal_care/services/membership_service.dart';
+import 'package:flutter_legal_care/services/query_service.dart';
 import 'package:flutter_legal_care/services/wallet_service.dart';
 import 'package:flutter_legal_care/state/auth_controller.dart';
 import 'package:flutter_legal_care/state/lawyer_controller.dart';
 import 'package:flutter_legal_care/state/location_controller.dart';
 import 'package:flutter_legal_care/state/marketplace_controller.dart';
+import 'package:flutter_legal_care/state/queries_controller.dart';
 import 'package:flutter_legal_care/state/wallet_controller.dart';
 
 class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin {
@@ -85,6 +88,8 @@ Widget _app(ApiClient api, AuthController auth) => MultiProvider(
         Provider(create: (_) => DashboardService(api)),
         Provider(create: (_) => ContentService(api)),
         Provider(create: (_) => MarketplaceService(api)),
+        Provider(create: (_) => QueryService(api)),
+        Provider(create: (_) => MembershipService(api)),
         ChangeNotifierProvider.value(value: auth),
         ChangeNotifierProvider(
           create: (context) => LocationController(context.read<ContentService>()),
@@ -110,6 +115,13 @@ Widget _app(ApiClient api, AuthController auth) => MultiProvider(
             context.read<AuthController>(),
           ),
           update: (_, __, lawyer) => lawyer!,
+        ),
+        ChangeNotifierProxyProvider<AuthController, QueriesController>(
+          create: (context) => QueriesController(
+            context.read<QueryService>(),
+            context.read<AuthController>(),
+          ),
+          update: (_, __, queries) => queries!,
         ),
       ],
       child: MaterialApp.router(routerConfig: AppRouter.build(auth)),

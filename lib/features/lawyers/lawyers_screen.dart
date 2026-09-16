@@ -10,6 +10,7 @@ import '../../core/widgets/states.dart';
 import '../../models/advocate.dart';
 import '../../services/advocate_service.dart';
 import '../../state/location_controller.dart';
+import '../queries/ask_lawyer_sheet.dart';
 import 'advocate_card.dart';
 import 'filter_screen.dart';
 
@@ -533,7 +534,12 @@ class _LawyersScreenState extends State<LawyersScreen> {
                 icon: const Icon(Icons.close_rounded, size: 16),
                 label: const Text('Clear all filters'),
               )
-            : null,
+            // Nobody to compare yet — describing the problem still gets a call.
+            : FilledButton.icon(
+                onPressed: () => AskLawyerSheet.open(context, category: _query.service),
+                icon: const Icon(Icons.question_answer_outlined, size: 16),
+                label: const Text('Ask a lawyer free'),
+              ),
       );
     }
 
@@ -543,7 +549,15 @@ class _LawyersScreenState extends State<LawyersScreen> {
         controller: _scroll,
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomGutter(context)),
         itemCount: _advocates.length + (_loadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        // After the second lawyer, for the visitor who would rather describe the
+        // problem than compare profiles — seen without scrolling far, and never
+        // above the lawyers they came for.
+        separatorBuilder: (_, index) => index == 1
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: AskLawyerBanner(category: _query.service),
+              )
+            : const SizedBox(height: 12),
         itemBuilder: (context, index) {
           if (index >= _advocates.length) {
             return const Padding(
