@@ -23,10 +23,20 @@ class LawyerHomeScreen extends StatelessWidget {
     final pending = lawyer.pending;
     final live = lawyer.live;
 
-    return RefreshIndicator(
-      onRefresh: lawyer.refreshAll,
-      child: ListView(
-        padding: EdgeInsets.zero,
+    return HeaderStatusBand(
+      // The header runs up under the status bar, and once it scrolls away the
+      // rows behind it would pass under the clock and the signal bars. The
+      // band carries the header's own colours so there is no seam across the
+      // top of the page when nothing has scrolled yet.
+      gradient: const LinearGradient(
+        colors: [AppColors.primaryLight, AppColors.primary],
+      ),
+      child: RefreshIndicator(
+        onRefresh: lawyer.refreshAll,
+        // Keep the spinner clear of the band.
+        edgeOffset: MediaQuery.paddingOf(context).top,
+        child: ListView(
+          padding: EdgeInsets.zero,
         children: [
           const _Header(),
           Padding(
@@ -43,37 +53,14 @@ class LawyerHomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                 ],
+                // No live/offline banner here. The switch in the header above
+                // already says which one you are, and says it where you change
+                // it; repeating it in a card underneath was the same fact
+                // twice on one screen. Availability itself is still a tap away
+                // from the rate tiles, Profile and Settings.
+                const _PerformanceSummary(),
+                const SizedBox(height: 14),
                 const _QuickActions(),
-                const SizedBox(height: 14),
-                const _LiveBanner(),
-                const SizedBox(height: 14),
-                const _EarningsCard(),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _StatTile(
-                      icon: Icons.groups_rounded,
-                      tone: AppColors.info,
-                      value: '${lawyer.paid.length}',
-                      label: 'Total\nConsultations',
-                    ),
-                    const SizedBox(width: 10),
-                    _StatTile(
-                      icon: Icons.schedule_rounded,
-                      tone: AppColors.danger,
-                      value: '${pending.length}',
-                      label: 'Pending\nRequests',
-                      onTap: () => context.go('/lawyer/requests'),
-                    ),
-                    const SizedBox(width: 10),
-                    _StatTile(
-                      icon: Icons.star_rounded,
-                      tone: const Color(0xFF7C3AED),
-                      value: (advocate?.rating ?? 0) > 0 ? Fmt.rating(advocate!.rating) : '—',
-                      label: '${advocate?.reviews ?? 0} reviews',
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 22),
                 SectionTitle(
                   title: 'Incoming Requests',
@@ -141,6 +128,7 @@ class LawyerHomeScreen extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -182,9 +170,17 @@ class _Header extends StatelessWidget {
               const Expanded(
                 child: Text(
                   'Justiceland',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontFamily: AppText.display, fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),
+              // Availability sits with the other controls rather than under the
+              // greeting: it is the one thing on this header a lawyer reaches
+              // for repeatedly, and the greeting is not a place to put a
+              // control.
+              const OnlineSwitch(onDark: true),
+              const SizedBox(width: 4),
               IconButton(
                 onPressed: () => context.push('/lawyer/notifications'),
                 icon: Badge(
@@ -198,7 +194,13 @@ class _Header extends StatelessWidget {
                 onTap: () => context.go('/lawyer/profile'),
                 child: Container(
                   decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white24, width: 2)),
-                  child: Avatar(name: advocate?.name ?? '', photo: advocate?.photo, size: 42, online: lawyer.available),
+                  child: Avatar(
+                    name: advocate?.name ?? '',
+                    photo: advocate?.photo,
+                    size: 42,
+                    online: lawyer.available,
+                    onDark: true,
+                  ),
                 ),
               ),
             ],
@@ -224,58 +226,109 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           const Text('Ready to help. Make a difference today!', style: TextStyle(color: Colors.white70, fontSize: 13)),
-          const SizedBox(height: 16),
-          const OnlineSwitch(onDark: true),
         ],
       ),
     );
   }
 }
 
-/// The online/offline switch as a white pill — on the navy header and on the
-/// availability screen alike.
+/// The online/offline switch as a compact pill — on the navy header and on
+/// the availability screen alike.
+///
+/// The track is drawn here rather than taken from Material's [Switch], which
+/// carries a 48dp tap target of its own and made this pill tall enough to
+/// crowd the greeting above it. The whole pill is the tap target instead, so
+/// the control got smaller without getting harder to hit.
 class OnlineSwitch extends StatelessWidget {
   const OnlineSwitch({super.key, this.onDark = false});
 
   final bool onDark;
 
+  static const Duration _swing = Duration(milliseconds: 180);
+
   @override
   Widget build(BuildContext context) {
     final lawyer = context.watch<LawyerController>();
     final on = lawyer.available;
+    final busy = lawyer.savingAvailability;
+    final tint = on ? const Color(0xFF15803D) : AppColors.inkMuted;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
-      decoration: BoxDecoration(
-        color: on ? AppColors.successSoft : Colors.white.withValues(alpha: onDark ? 0.92 : 1.0),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        border: onDark ? null : Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            on ? 'Online' : 'Offline',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: on ? const Color(0xFF15803D) : AppColors.inkMuted),
+        onTap: busy ? null : () => toggleOnline(context, !on),
+        child: AnimatedContainer(
+          duration: _swing,
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: on
+                ? AppColors.successSoft
+                : Colors.white.withValues(alpha: onDark ? 0.92 : 1.0),
+            borderRadius: BorderRadius.circular(999),
+            border: onDark ? null : Border.all(color: AppColors.border),
           ),
-          const SizedBox(width: 6),
-          if (lawyer.savingAvailability)
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else
-            Switch(
-              value: on,
-              activeThumbColor: Colors.white,
-              activeTrackColor: AppColors.success,
-              onChanged: (value) => toggleOnline(context, value),
-            ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                on ? 'Online' : 'Offline',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: tint,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // The spinner takes the track's exact footprint, so the pill does
+              // not jump while the server is being told.
+              SizedBox(
+                width: 34,
+                height: 18,
+                child: busy
+                    ? Center(
+                        child: SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: tint,
+                          ),
+                        ),
+                      )
+                    : _track(on),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  Widget _track(bool on) {
+    return AnimatedContainer(
+      duration: _swing,
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: on ? AppColors.success : AppColors.ink.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: AnimatedAlign(
+        duration: _swing,
+        curve: Curves.easeOut,
+        alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 14,
+          height: 14,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Flips the online switch and says what that means for bookings.
@@ -293,163 +346,221 @@ Future<void> toggleOnline(BuildContext context, bool value) async {
   }
 }
 
+/// What a lawyer charges, per channel, under one heading.
+///
+/// Three loose tiles read as three buttons; the heading and the card say what
+/// they actually are — this lawyer's rates — and the price is what the eye
+/// should land on, so it is set larger than the channel it belongs to.
 class _QuickActions extends StatelessWidget {
   const _QuickActions();
 
   @override
   Widget build(BuildContext context) {
     final advocate = context.watch<AuthController>().advocate;
-    Widget tile(IconData icon, String label, String sub, VoidCallback onTap, {bool highlight = false}) {
-      return Expanded(
-        child: Material(
-          color: highlight ? AppColors.accentSoft : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: highlight ? AppColors.accent.withValues(alpha: 0.5) : AppColors.border),
-              ),
-              child: Column(
-                children: [
-                  Icon(icon, size: 24, color: AppColors.primary),
-                  const SizedBox(height: 6),
-                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                  Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: AppColors.inkFaint)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    String rate(int r) => r > 0 ? Fmt.rate(r) : 'Off';
-    void rates() => context.push('/lawyer/availability');
-
-    return Row(
-      children: [
-        tile(Icons.chat_rounded, 'Chat', rate(advocate?.chatRate ?? 0), rates, highlight: true),
-        const SizedBox(width: 8),
-        tile(Icons.call_rounded, 'Audio Call', rate(advocate?.audioRate ?? 0), rates),
-        const SizedBox(width: 8),
-        tile(Icons.videocam_rounded, 'Video Call', rate(advocate?.videoRate ?? 0), rates),
-        const SizedBox(width: 8),
-        tile(Icons.settings_rounded, 'Settings', 'Account', () => context.push('/lawyer/settings')),
-      ],
-    );
-  }
-}
-
-class _LiveBanner extends StatelessWidget {
-  const _LiveBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final on = context.watch<LawyerController>().available;
-    return Material(
-      color: on ? AppColors.successSoft : AppColors.warningSoft,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => context.push('/lawyer/availability'),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: (on ? AppColors.success : AppColors.warning).withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: on ? const Color(0xFF15803D) : AppColors.warning,
-                child: Icon(on ? Icons.bolt_rounded : Icons.bedtime_outlined, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      on ? 'You are Live!' : 'You are Offline',
-                      style: TextStyle(
-                        fontFamily: AppText.display,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: on ? const Color(0xFF166534) : AppColors.warning,
-                      ),
-                    ),
-                    Text(
-                      on ? 'Clients can now chat, call or video call you.' : 'Clients can’t book you right now.',
-                      style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EarningsCard extends StatelessWidget {
-  const _EarningsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final lawyer = context.watch<LawyerController>();
-    final today = lawyer.earnedToday;
-    final yesterday = lawyer.earnedYesterday;
-    final change = yesterday > 0 ? ((today - yesterday) / yesterday * 100).round() : null;
 
     return LCard(
-      onTap: () => context.push('/lawyer/earnings'),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      onTap: () => context.push('/lawyer/availability'),
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Today's Earnings", style: TextStyle(fontSize: 13, color: AppColors.inkMuted)),
-                const SizedBox(height: 4),
-                Text(Fmt.money(today), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                if (change == null)
-                  Text('Nothing earned yesterday to compare', style: TextStyle(fontSize: 12, color: AppColors.inkFaint))
-                else
-                  Row(
-                    children: [
-                      Icon(
-                        change >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                        size: 15,
-                        color: change >= 0 ? AppColors.success : AppColors.danger,
-                      ),
-                      Text(
-                        ' ${change.abs()}% from yesterday',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: change >= 0 ? const Color(0xFF15803D) : AppColors.danger,
-                        ),
-                      ),
-                    ],
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Communication Channels',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: AppText.display,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
+                ),
+              ),
+              // Says what tapping the card does; the rates are set on the
+              // availability screen, not here.
+              Text(
+                'Edit rates',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary.withValues(alpha: 0.75),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.inkFaint),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, thickness: 1, color: AppColors.border),
+          const SizedBox(height: 16),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _channel(Icons.chat_rounded, 'Chat', advocate?.chatRate ?? 0),
+                _rule(),
+                _channel(Icons.call_rounded, 'Audio Call', advocate?.audioRate ?? 0),
+                _rule(),
+                _channel(Icons.videocam_rounded, 'Video Call', advocate?.videoRate ?? 0),
               ],
             ),
           ),
-          WeekBars(days: lawyer.week, height: 56, compact: true),
         ],
       ),
     );
   }
+
+  Widget _channel(IconData icon, String label, int perMinute) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22, color: AppColors.primary),
+          const SizedBox(height: 8),
+          if (perMinute <= 0)
+            Text(
+              'Off',
+              style: TextStyle(
+                fontFamily: AppText.display,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.inkFaint,
+              ),
+            )
+          else
+            // The amount carries the weight; the unit rides small beside it, so
+            // "₹100" is what reads across the row rather than "/min" three
+            // times over.
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  Fmt.money(perMinute),
+                  style: const TextStyle(
+                    fontFamily: AppText.display,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.accent,
+                  ),
+                ),
+                Text(
+                  '/min',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rule() => VerticalDivider(
+        width: 1,
+        thickness: 1,
+        color: AppColors.border,
+      );
+}
+
+/// Today's earnings, consultations done and requests waiting — on one card.
+///
+/// These were an earnings card and a row of three tiles: four boxes for what
+/// is really three numbers a lawyer checks together. One of the tiles was a
+/// star rating with no reviews behind it, which for a new lawyer is a box that
+/// says nothing and cannot be acted on. Side by side the three figures can be
+/// read against each other, which is the only reason to look at them at once.
+class _PerformanceSummary extends StatelessWidget {
+  const _PerformanceSummary();
+
+  @override
+  Widget build(BuildContext context) {
+    final lawyer = context.watch<LawyerController>();
+
+    return LCard(
+      onTap: () => context.push('/lawyer/earnings'),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Performance Summary',
+                  style: TextStyle(
+                    fontFamily: AppText.display,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              // The week at a glance, beside the heading rather than under a
+              // figure — it belongs to all three numbers, not just the money.
+              WeekBars(days: lawyer.week, height: 30, compact: true),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, thickness: 1, color: AppColors.border),
+          const SizedBox(height: 16),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _figure(Fmt.money(lawyer.earnedToday), "Today's\nEarnings", AppColors.accent),
+                _rule(),
+                _figure('${lawyer.paid.length}', 'Completed\nConsultations', AppColors.ink),
+                _rule(),
+                _figure('${lawyer.pending.length}', 'Pending\nRequests', AppColors.ink),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _figure(String value, String label, Color tone) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: AppText.display,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: tone,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, height: 1.3, color: AppColors.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rule() => VerticalDivider(
+        width: 1,
+        thickness: 1,
+        color: AppColors.border,
+      );
 }
 
 /// Seven gold bars, today solid. Heights are relative to the week's best day.
@@ -505,45 +616,6 @@ class WeekBars extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.icon, required this.tone, required this.value, required this.label, this.onTap});
-
-  final IconData icon;
-  final Color tone;
-  final String value;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: LCard(
-        onTap: onTap,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-        child: Column(
-          children: [
-            Container(
-              height: 38,
-              width: 38,
-              decoration: BoxDecoration(color: tone.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: tone, size: 20),
-            ),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              style: TextStyle(fontSize: 11, height: 1.2, color: AppColors.inkMuted),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

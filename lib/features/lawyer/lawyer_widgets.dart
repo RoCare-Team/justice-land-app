@@ -99,24 +99,34 @@ class SectionTitle extends StatelessWidget {
             Icon(icon, size: 20, color: AppColors.primary),
             const SizedBox(width: 8),
           ],
-          Flexible(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: AppText.display,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: AppColors.ink,
-              ),
+          // Title and badge share one flexible slot, with the action outside
+          // it. As a Flexible beside a Spacer they were two flex children of
+          // equal weight, so the free space split evenly and "Active
+          // Consultations" ellipsised at half the row with the other half
+          // empty.
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: AppText.display,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+                if ((count ?? 0) > 0) ...[
+                  const SizedBox(width: 8),
+                  CountBadge(count: count!),
+                ],
+              ],
             ),
           ),
-          if ((count ?? 0) > 0) ...[
-            const SizedBox(width: 8),
-            CountBadge(count: count!),
-          ],
-          const Spacer(),
           if (action != null)
             TextButton(
               onPressed: onAction,

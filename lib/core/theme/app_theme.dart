@@ -85,15 +85,17 @@ class AppTheme {
         scrolledUnderElevation: 0.5,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        // No colour here on purpose: a colour set in titleTextStyle beats the
-        // bar's foregroundColor, so pinning it to ink painted a dark title on
-        // every dark app bar — the service detail screen's navy one had a
-        // title you could not read. Left unset, the title follows whatever
-        // foregroundColor the bar carries, which is ink by default above.
+        // The colour has to be here. An AppBarTheme.titleTextStyle is used as
+        // given — AppBar does not fold foregroundColor into it — so leaving it
+        // unset does not inherit ink, it leaves the title colourless, and a
+        // colourless title paints white: invisible on every one of these bars.
+        // A bar that is not white sets its own titleTextStyle; see
+        // service_detail_screen.dart.
         titleTextStyle: const TextStyle(
           fontFamily: AppText.display,
           fontSize: 19,
           fontWeight: FontWeight.w600,
+          color: AppColors.ink,
         ),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
       ),

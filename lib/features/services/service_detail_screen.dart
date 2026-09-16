@@ -86,6 +86,13 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           pinned: true,
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          // The theme's title is ink, for the white bars everywhere else.
+          titleTextStyle: const TextStyle(
+            fontFamily: AppText.display,
+            fontSize: 19,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
           // The theme's bars are light and ask for dark status-bar icons; this
           // one is navy, and on it those icons are all but invisible.
           systemOverlayStyle: SystemUiOverlayStyle.light,

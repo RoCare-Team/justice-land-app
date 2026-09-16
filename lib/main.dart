@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'core/network/api_client.dart';
@@ -132,9 +133,67 @@ class _AppState extends State<_App> {
           data: media.copyWith(
             textScaler: media.textScaler.clamp(maxScaleFactor: 1.3),
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: _BackGuard(child: child ?? const SizedBox.shrink()),
         );
       },
+    );
+  }
+}
+
+/// Asks before the back button closes the app.
+///
+/// The tabs are reached with `go`, which replaces the stack rather than
+/// stacking on it, so on a tab there is nothing to pop and the first back press
+/// used to drop the lawyer — or the client — straight out of the app, mid
+/// session and without warning. Back still means back wherever there is
+/// somewhere to go back to; it only asks at the point where the answer is
+/// "nowhere, so we would be leaving".
+class _BackGuard extends StatelessWidget {
+  const _BackGuard({required this.child});
+
+  final Widget child;
+
+  Future<bool> _confirm(BuildContext context) async {
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Close Justiceland?'),
+        content: const Text('You will stay signed in for the next time.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    return leave ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      // Never pop straight away: whether this back press should move within the
+      // app or leave it is decided below.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+
+        final router = GoRouter.of(context);
+        if (router.canPop()) {
+          router.pop();
+          return;
+        }
+
+        if (await _confirm(context)) {
+          await SystemNavigator.pop();
+        }
+      },
+      child: child,
     );
   }
 }

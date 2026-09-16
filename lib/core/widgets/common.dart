@@ -29,12 +29,22 @@ double bottomGutter(BuildContext context, [double extra = 28]) =>
 /// the page: against the header it is invisible, and once the header has
 /// scrolled away it is what the rows pass behind instead of under the icons.
 class HeaderStatusBand extends StatelessWidget {
-  const HeaderStatusBand({super.key, required this.child, this.color = AppColors.primary});
+  const HeaderStatusBand({
+    super.key,
+    required this.child,
+    this.color = AppColors.primary,
+    this.gradient,
+  });
 
   final Widget child;
 
   /// Matches the header the band sits in front of.
   final Color color;
+
+  /// For a header that is not one flat colour. Painting a solid band over a
+  /// gradient leaves a seam across the top of the screen, so a screen with a
+  /// gradient header hands its own here; [color] is ignored when this is set.
+  final Gradient? gradient;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +62,10 @@ class HeaderStatusBand extends StatelessWidget {
             child: IgnorePointer(
               child: Container(
                 height: MediaQuery.paddingOf(context).top,
-                color: color,
+                decoration: BoxDecoration(
+                  color: gradient == null ? color : null,
+                  gradient: gradient,
+                ),
               ),
             ),
           ),
@@ -179,6 +192,7 @@ class Avatar extends StatelessWidget {
     this.photo,
     this.size = 44,
     this.online,
+    this.onDark = false,
   });
 
   final String name;
@@ -189,6 +203,11 @@ class Avatar extends StatelessWidget {
   /// things, and a grey dot on a lawyer whose status has not loaded reads as
   /// unavailable.
   final bool? online;
+
+  /// Set on a dark header. The fallback is navy lettering on a navy tint,
+  /// which is meant for a white page — on the lawyer header both halves were
+  /// the same colour as the background and the circle read as empty.
+  final bool onDark;
 
   /// Kept as the name every caller already uses; the rule itself lives in
   /// [RemoteImage] so there is one answer to "what is this image".
@@ -201,7 +220,7 @@ class Avatar extends StatelessWidget {
       style: TextStyle(
         fontSize: size * 0.38,
         fontWeight: FontWeight.w700,
-        color: AppColors.primary,
+        color: onDark ? Colors.white : AppColors.primary,
       ),
     );
 
@@ -210,8 +229,12 @@ class Avatar extends StatelessWidget {
       width: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: AppColors.primary.withOpacity(0.10),
-        border: Border.all(color: AppColors.border),
+        color: onDark
+            ? Colors.white.withValues(alpha: 0.16)
+            : AppColors.primary.withValues(alpha: 0.10),
+        border: Border.all(
+          color: onDark ? Colors.white24 : AppColors.border,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,

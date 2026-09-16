@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/config/consultation_slots.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
 import '../../models/advocate.dart';
 
@@ -44,8 +44,15 @@ class AdvocateCard extends StatelessWidget {
     // The card leads with chat, the cheapest way in and the channel most
     // clients start on, then call. Video lives on the profile, where there is
     // room for all nine figures.
-    final chat10 = slotPriceFor(advocate.slotPrices, 10, channel: 'chat');
-    final call10 = slotPriceFor(advocate.slotPrices, 10, channel: 'audio');
+    //
+    // These are the lawyer's own per-minute rates, the same figures the
+    // website quotes beside each channel. The card used to read them out of
+    // `slotPrices`, but no record the directory returns carries that field —
+    // it is absent on the website's own payload too — so every lawyer fell
+    // through to the 10-minute default and every card in the list quoted the
+    // same ₹200, whether the lawyer charges ₹10 a minute or ₹1,000.
+    final chatRate = advocate.chatRate;
+    final callRate = advocate.audioRate;
 
     return Material(
       color: AppColors.surface,
@@ -64,7 +71,7 @@ class AdvocateCard extends StatelessWidget {
             children: [
               _portrait(),
               const SizedBox(width: 12),
-              Expanded(child: _details(chat10, call10)),
+              Expanded(child: _details(chatRate, callRate)),
             ],
           ),
         ),
@@ -169,7 +176,7 @@ class AdvocateCard extends StatelessWidget {
     );
   }
 
-  Widget _details(int chat10, int call10) {
+  Widget _details(int chatRate, int callRate) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -259,9 +266,9 @@ class AdvocateCard extends StatelessWidget {
         const SizedBox(height: 9),
         Row(
           children: [
-            _pricePill(Icons.chat_bubble_outline_rounded, chat10),
+            _pricePill(Icons.chat_bubble_outline_rounded, 'Chat', chatRate),
             const SizedBox(width: 8),
-            _pricePill(Icons.call_outlined, call10),
+            _pricePill(Icons.call_outlined, 'Call', callRate),
           ],
         ),
       ],
@@ -350,13 +357,17 @@ class AdvocateCard extends StatelessWidget {
     return '$n';
   }
 
-  /// "💬 ₹200 /10 min" — the icon says which channel, the large number what it
-  /// costs, the small one what it buys.
+  /// "💬 ₹50 /min" — the icon says which channel, the large number what a
+  /// minute of it costs.
   ///
-  /// The length has to be there. "₹200" alone invites the reader to assume a
-  /// per-minute rate, which is what this product used to charge and no longer
-  /// does; at ten minutes that misreading is off by a factor of ten.
-  Widget _pricePill(IconData icon, int price) {
+  /// The unit has to be there: "₹50" alone reads as the price of the whole
+  /// consultation, and on a twenty-minute call that misreading is out by a
+  /// factor of twenty.
+  ///
+  /// A lawyer who has not set a rate gets the channel's name instead of a
+  /// price, the way the website leaves the figure off rather than quoting ₹0 —
+  /// which would read as "free" for someone who simply has not priced it yet.
+  Widget _pricePill(IconData icon, String channel, int perMinute) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -369,22 +380,33 @@ class AdvocateCard extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: AppColors.primary),
           const SizedBox(width: 5),
-          Text(
-            '₹$price',
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
+          if (perMinute <= 0)
+            Text(
+              channel,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            )
+          else ...[
+            Text(
+              Fmt.money(perMinute),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
             ),
-          ),
-          Text(
-            '/10 min',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: AppColors.primary.withValues(alpha: 0.6),
+            Text(
+              '/min',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: AppColors.primary.withValues(alpha: 0.6),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

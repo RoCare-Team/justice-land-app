@@ -1,4 +1,4 @@
-package com.justiceland.flutter_legal_care
+package com.justiceland.care
 
 import io.flutter.embedding.android.FlutterActivity
 
