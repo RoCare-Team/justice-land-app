@@ -273,7 +273,7 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
             ? 'Log in'
             : 'Register as a lawyer',
         _Step.otp => 'Enter the code',
-        _Step.details => 'A few basics',
+        _Step.details => 'Basic Details',
       };
 
   String? get _subtitle => switch (_step) {
@@ -282,14 +282,14 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
               'remember.',
         _Step.otp => null,
         _Step.details =>
-          'Three fields and your account is live. The rest of your profile '
-              'comes next, guided.',
+          'Step 1 of 3. Next you verify your Bar Council details and choose '
+              'your practice areas.',
       };
 
   String get _cta => switch (_step) {
         _Step.phone => 'Send code',
         _Step.otp => 'Verify',
-        _Step.details => 'Create my account',
+        _Step.details => 'Continue',
       };
 
   bool get _canSubmit => switch (_step) {

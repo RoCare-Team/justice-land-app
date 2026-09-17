@@ -59,11 +59,15 @@ class Fmt {
     return 'just now';
   }
 
-  /// `12:04` — the live consultation clock, counting down remaining time.
+  /// `12:04`, or `1:05:30` past an hour — the live consultation clock.
   static String clock(Duration d) {
     final total = d.isNegative ? Duration.zero : d;
-    final m = total.inMinutes.toString().padLeft(2, '0');
     final s = (total.inSeconds % 60).toString().padLeft(2, '0');
+    if (total.inHours > 0) {
+      final m = (total.inMinutes % 60).toString().padLeft(2, '0');
+      return '${total.inHours}:$m:$s';
+    }
+    final m = total.inMinutes.toString().padLeft(2, '0');
     return '$m:$s';
   }
 

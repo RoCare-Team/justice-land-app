@@ -20,6 +20,13 @@ class DashboardService {
     return Advocate.fromJson(J.map(map['advocate'] ?? map));
   }
 
+  /// How complete the lawyer's profile is — the same score as the website's
+  /// dashboard, read off the profile route.
+  Future<ProfileCompletion> completion() async {
+    final data = await _api.get(Endpoints.dashboardProfile);
+    return ProfileCompletion.fromJson(J.map(J.map(data)['completion']));
+  }
+
   /// The lawyer's earnings wallet — what paid consultations have credited.
   ///
   /// Read off the same profile route: for the signed-in lawyer it carries
@@ -99,4 +106,78 @@ class DashboardService {
     final map = J.map(data);
     return J.str(map['url'] ?? map['path'] ?? map['location']);
   }
+
+  // ── Verification documents ───────────────────────────────────────────────
+
+  /// The documents this lawyer has uploaded, by kind.
+  Future<Map<String, VerificationDocument>> verificationDocuments() async {
+    final data = await _api.get(Endpoints.verificationDocuments);
+    final docs = J.models(J.map(data)['documents'], VerificationDocument.fromJson);
+    return {for (final d in docs) d.kind: d};
+  }
+
+  /// Uploads (or replaces) one document. [kind] is `bar_council_certificate`
+  /// or `government_id`.
+  Future<VerificationDocument> uploadVerificationDocument({
+    required String kind,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final form = FormData.fromMap({
+      'kind': kind,
+      'file': await MultipartFile.fromFile(filePath, filename: fileName),
+    });
+    final data = await _api.upload(Endpoints.verificationDocuments, form: form);
+    return VerificationDocument.fromJson(J.map(J.map(data)['document']));
+  }
+}
+
+/// Profile completion: a percentage and what is still missing.
+class ProfileCompletion {
+  const ProfileCompletion({
+    required this.percent,
+    required this.done,
+    required this.total,
+    required this.missing,
+  });
+
+  final int percent;
+  final int done;
+  final int total;
+  final List<({String key, String label, String step})> missing;
+
+  factory ProfileCompletion.fromJson(Map<String, dynamic> j) => ProfileCompletion(
+        percent: J.int$(j['percent']).clamp(0, 100),
+        done: J.int$(j['done']),
+        total: J.int$(j['total']),
+        missing: [
+          for (final m in J.mapList(j['missing']))
+            (key: J.str(m['key']), label: J.str(m['label']), step: J.str(m['step'])),
+        ],
+      );
+}
+
+/// One uploaded verification document — its details, never its contents.
+class VerificationDocument {
+  const VerificationDocument({
+    required this.id,
+    required this.kind,
+    required this.fileName,
+    required this.size,
+    this.uploadedAt,
+  });
+
+  final String id;
+  final String kind;
+  final String fileName;
+  final int size;
+  final DateTime? uploadedAt;
+
+  factory VerificationDocument.fromJson(Map<String, dynamic> j) => VerificationDocument(
+        id: J.str(j['id']),
+        kind: J.str(j['kind']),
+        fileName: J.str(j['fileName']),
+        size: J.int$(j['size']),
+        uploadedAt: J.date(j['uploadedAt']),
+      );
 }

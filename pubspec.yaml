@@ -50,6 +50,9 @@ dependencies:
   intl: ^0.19.0
   url_launcher: ^6.3.0
   image_picker: ^1.1.2
+  # Bar Council certificate and ID proof uploads accept PDFs, which the image
+  # picker cannot choose.
+  file_picker: ^10.1.9
   shimmer: ^3.0.0
 
 dev_dependencies:

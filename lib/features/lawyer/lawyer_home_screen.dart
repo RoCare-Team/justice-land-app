@@ -6,11 +6,13 @@ import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/verified_badge.dart';
 import '../../core/widgets/states.dart';
 import '../../state/auth_controller.dart';
 import '../../state/lawyer_controller.dart';
 import '../../state/queries_controller.dart';
 import 'lawyer_widgets.dart';
+import 'profile_completion_card.dart';
 
 /// Public legal problems waiting for a lawyer: the newest few with the credit
 /// count on a paid plan, or the waiting count and a way to unlock on Starter.
@@ -194,6 +196,9 @@ class LawyerHomeScreen extends StatelessWidget {
                 // it; repeating it in a card underneath was the same fact
                 // twice on one screen. Availability itself is still a tap away
                 // from the rate tiles, Profile and Settings.
+                // Hidden once the profile is complete.
+                const ProfileCompletionCard(hideWhenComplete: true),
+                const SizedBox(height: 14),
                 const _PerformanceSummary(),
                 const SizedBox(height: 14),
                 const _QuickActions(),
@@ -356,12 +361,12 @@ class _Header extends StatelessWidget {
                   style: const TextStyle(fontFamily: AppText.display, fontSize: 25, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),
-              if (advocate?.verified ?? false) ...[
-                const SizedBox(width: 6),
-                const Icon(Icons.verified_rounded, color: AppColors.success, size: 22),
-              ],
             ],
           ),
+          const SizedBox(height: 6),
+          (advocate?.verified ?? false)
+              ? const VerifiedBadge(onDark: true)
+              : const VerificationPendingBadge(onDark: true),
           const SizedBox(height: 2),
           const Text('Ready to help. Make a difference today!', style: TextStyle(color: Colors.white70, fontSize: 13)),
         ],

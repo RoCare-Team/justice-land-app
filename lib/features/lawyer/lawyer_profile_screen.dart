@@ -5,10 +5,12 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/verified_badge.dart';
 import '../../state/auth_controller.dart';
 import '../../state/lawyer_controller.dart';
 import 'lawyer_settings_screen.dart' show confirmLawyerLogout;
 import 'lawyer_widgets.dart';
+import 'profile_completion_card.dart';
 
 /// The lawyer's own profile, as the practice is set up — and the way into
 /// everything that manages it.
@@ -54,12 +56,10 @@ class LawyerProfileScreen extends StatelessWidget {
                           style: const TextStyle(fontFamily: AppText.display, fontSize: 21, fontWeight: FontWeight.w700),
                         ),
                       ),
-                      if (advocate.verified) ...[
-                        const SizedBox(width: 6),
-                        const Icon(Icons.verified_rounded, color: AppColors.info, size: 20),
-                      ],
                     ],
                   ),
+                  const SizedBox(height: 6),
+                  advocate.verified ? const VerifiedBadge() : const VerificationPendingBadge(),
                   if (advocate.legalCareId.isNotEmpty)
                     Text(advocate.legalCareId, style: TextStyle(fontSize: 12, letterSpacing: 0.5, color: AppColors.inkFaint)),
                   const SizedBox(height: 6),
@@ -78,10 +78,18 @@ class LawyerProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            const ProfileCompletionCard(),
+            const SizedBox(height: 12),
             LCard(
               child: Column(
                 children: [
                   _detail('Bar Council ID', advocate.barCouncilNumber),
+                  _detail(
+                    'In-person consultation',
+                    advocate.consultationFee > 0
+                        ? '${Fmt.money(advocate.consultationFee)} per visit'
+                        : 'Not offered',
+                  ),
                   _detail('Experience', Fmt.experience(advocate.experience)),
                   _detail('Languages', advocate.languages.join(', ')),
                   _detail('Location', [advocate.city, advocate.state].where((s) => s.isNotEmpty).join(', ')),
@@ -119,6 +127,7 @@ class LawyerProfileScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  _link(context, Icons.verified_user_outlined, 'Verification & practice areas', '/lawyer/onboarding'),
                   _link(context, Icons.inbox_outlined, 'Client Queries', '/lawyer/queries'),
                   _link(context, Icons.workspace_premium_outlined, 'My Plan', '/lawyer/plan'),
                   _link(context, Icons.account_balance_wallet_outlined, 'Earnings', '/lawyer/earnings'),

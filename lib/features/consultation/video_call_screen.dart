@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
 import '../../models/consultation.dart';
@@ -69,6 +70,29 @@ class _VideoCallViewState extends State<_VideoCallView> {
 
   /// Candidates already sent to the peer, so a re-poll does not resend them.
   final Set<String> _sentCandidates = {};
+
+  /// Whether the other side's offer/answer has been applied. Tracked here
+  /// rather than read back off the peer connection, which on some devices
+  /// reports an empty description instead of none.
+  bool _remoteSet = false;
+
+  /// ICE candidates that arrived before the remote description — adding them
+  /// then fails, and the cursor has already moved past them, so they are held
+  /// and applied once the description is in. Losing them is how a call sits on
+  /// "Connecting…" for good.
+  final List<String> _pendingIce = [];
+
+  /// One signalling read at a time. A 1-second timer does not wait for the
+  /// previous read, and two overlapping reads could each apply the offer and
+  /// send two different answers.
+  bool _polling = false;
+
+  void _resetHandshake() {
+    _since = 0;
+    _remoteSet = false;
+    _pendingIce.clear();
+    _sentCandidates.clear();
+  }
 
   @override
   void initState() {
@@ -192,6 +216,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
       _connecting = true;
       _error = '';
     });
+    _resetHandshake();
     try {
       final service = context.read<ConsultationService>();
       final call = await service.startCall(widget.consultationId);
@@ -209,6 +234,10 @@ class _VideoCallViewState extends State<_VideoCallView> {
         _connecting = false;
         _error = e.message;
       });
+    } catch (_) {
+      await _hangUp(failed: true);
+      if (!mounted) return;
+      setState(() => _error = 'Could not start the video call. Please try again.');
     }
   }
 
@@ -218,6 +247,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
       _connecting = true;
       _error = '';
     });
+    _resetHandshake();
     try {
       final service = context.read<ConsultationService>();
       final call = await service.answerCall(widget.consultationId, accept: accept);
@@ -230,12 +260,19 @@ class _VideoCallViewState extends State<_VideoCallView> {
 
       _peer = await _createPeer();
       _beginPolling();
+      // Read straight away rather than a second from now — the offer is
+      // already waiting on the server.
+      unawaited(_readSignals());
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _connecting = false;
         _error = e.message;
       });
+    } catch (_) {
+      await _hangUp(failed: true);
+      if (!mounted) return;
+      setState(() => _error = 'Could not answer the video call. Please try again.');
     }
   }
 
@@ -246,62 +283,87 @@ class _VideoCallViewState extends State<_VideoCallView> {
 
   Future<void> _readSignals() async {
     final peer = _peer;
-    if (peer == null) return;
+    if (peer == null || _polling) return;
+    _polling = true;
 
     try {
       final state = await context
           .read<ConsultationService>()
           .callState(widget.consultationId, since: _since);
-      _since = state.cursor;
+      if (!identical(peer, _peer)) return; // hung up while the read was out
 
-      if (state.isOver) {
+      // A newer call replaced this one, or it was hung up / declined.
+      final stale = state.id.isNotEmpty && _callId.isNotEmpty && state.id != _callId;
+      if (stale || state.isOver || (state.isIdle && _callId.isNotEmpty)) {
         _signalPoll?.cancel();
+        await _teardownPeer();
         if (mounted) {
           setState(() {
             _connected = false;
             _connecting = false;
+            if (state.endedReason == 'rejected') {
+              _error = '';
+            }
           });
         }
         return;
       }
 
-      final remote = await peer.getRemoteDescription();
-
       // The lawyer's side: adopt the client's offer, then answer it.
-      if (remote == null && state.offer.isNotEmpty && _isAdvocate) {
+      if (_isAdvocate && !_remoteSet && state.offer.isNotEmpty) {
         final map = jsonDecode(state.offer) as Map<String, dynamic>;
         await peer.setRemoteDescription(
           RTCSessionDescription(map['sdp'] as String?, map['type'] as String?),
         );
+        _remoteSet = true;
         final answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         await _pushSignal(answer: jsonEncode(answer.toMap()));
       }
 
       // The client's side: adopt the lawyer's answer.
-      if (remote == null && state.answer.isNotEmpty && !_isAdvocate) {
+      if (!_isAdvocate && !_remoteSet && state.answer.isNotEmpty) {
         final map = jsonDecode(state.answer) as Map<String, dynamic>;
         await peer.setRemoteDescription(
           RTCSessionDescription(map['sdp'] as String?, map['type'] as String?),
         );
+        _remoteSet = true;
       }
 
-      for (final raw in state.candidates) {
+      // Candidates can arrive before the description; hold them until then.
+      final ready = <String>[];
+      if (_remoteSet) {
+        ready
+          ..addAll(_pendingIce)
+          ..addAll(state.candidates);
+        _pendingIce.clear();
+      } else {
+        _pendingIce.addAll(state.candidates);
+      }
+      for (final raw in ready) {
         try {
           final map = jsonDecode(raw) as Map<String, dynamic>;
           await peer.addCandidate(
             RTCIceCandidate(
               map['candidate'] as String?,
               map['sdpMid'] as String?,
-              map['sdpMLineIndex'] as int?,
+              (map['sdpMLineIndex'] as num?)?.toInt(),
             ),
           );
         } catch (_) {
           // One malformed candidate must not stop the rest arriving.
         }
       }
+
+      // Only now that everything read has been used or held.
+      _since = state.cursor;
     } on ApiException {
       // Keep polling; a single failed read is not a dropped call.
+    } catch (_) {
+      // A description the peer refused. Keep polling rather than throwing out
+      // of a timer; if the connection truly fails, onConnectionState ends it.
+    } finally {
+      _polling = false;
     }
   }
 
@@ -316,13 +378,23 @@ class _VideoCallViewState extends State<_VideoCallView> {
     } on ApiException {
       // Hanging up locally still has to happen even if the server missed it.
     }
-    await _teardown();
+    await _teardownPeer();
     if (mounted) {
       setState(() {
         _connected = false;
         _connecting = false;
       });
     }
+  }
+
+  /// Closes the connection but keeps the camera open, so the next call in the
+  /// same session can start without asking for it again.
+  Future<void> _teardownPeer() async {
+    final peer = _peer;
+    _peer = null;
+    await peer?.close();
+    _remoteRenderer.srcObject = null;
+    _resetHandshake();
   }
 
   Future<void> _teardown() async {
@@ -498,8 +570,10 @@ class _VideoCallViewState extends State<_VideoCallView> {
               const SizedBox(height: 8),
               Text(
                 isAdvocate
-                    ? 'Wait for the client to start the call, or answer when it rings.'
-                    : 'Ready when you are. The clock is already running on this session.',
+                    ? (session.call?.isRinging ?? false)
+                        ? 'is calling you on video.'
+                        : 'Waiting for the client to start the video call.'
+                    : 'Ready when you are. The session timer started when the lawyer accepted.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white60, height: 1.5),
               ),
@@ -510,7 +584,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
                   icon: const Icon(Icons.videocam_rounded),
                   label: const Text('Start video call'),
                 )
-              else ...[
+              else if (session.call?.isRinging ?? false) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -531,7 +605,12 @@ class _VideoCallViewState extends State<_VideoCallView> {
                     ),
                   ],
                 ),
-              ],
+              ] else
+                const SizedBox(
+                  height: 26,
+                  width: 26,
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white54),
+                ),
             ],
           ),
         ),
@@ -614,8 +693,8 @@ class _VideoCallViewState extends State<_VideoCallView> {
                 ),
                 Text(
                   session.isResume
-                      ? 'Free resume · ${_clock(session)} left'
-                      : '${_clock(session)} left · ₹${session.runningCost} so far',
+                      ? 'Free resume · ${Fmt.clock(session.elapsed)}'
+                      : '${Fmt.clock(session.elapsed)} · ₹${session.runningCost} so far',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
@@ -624,13 +703,6 @@ class _VideoCallViewState extends State<_VideoCallView> {
         ],
       ),
     );
-  }
-
-  String _clock(Consultation session) {
-    final d = session.remaining;
-    final m = d.inMinutes.toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   Widget _controls(

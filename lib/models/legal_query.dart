@@ -174,6 +174,8 @@ class MembershipPlan {
     required this.yearBase,
     required this.yearGst,
     required this.yearTotal,
+    this.areas,
+    this.matters,
   });
 
   final String id;
@@ -181,6 +183,14 @@ class MembershipPlan {
   final String tagline;
   final int monthly;
   final int queryCredits;
+
+  /// How many practice areas and matters the plan lets a lawyer list.
+  /// `null` means no limit. The server enforces the same numbers on save.
+  final int? areas;
+  final int? matters;
+
+  bool allowsAreas(int count) => areas == null || count <= areas!;
+  bool allowsMatters(int count) => matters == null || count <= matters!;
   final String placement;
   final List<String> features;
 
@@ -194,6 +204,8 @@ class MembershipPlan {
   factory MembershipPlan.fromJson(Map<String, dynamic> j) {
     final price = J.map(j['price']);
     return MembershipPlan(
+      areas: j['areas'] == null ? null : J.int$(j['areas']),
+      matters: j['matters'] == null ? null : J.int$(j['matters']),
       id: J.str(j['id']),
       name: J.str(j['name']),
       tagline: J.str(j['tagline']),

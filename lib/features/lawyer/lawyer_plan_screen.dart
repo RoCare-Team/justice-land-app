@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
@@ -12,6 +11,7 @@ import '../../core/widgets/states.dart';
 import '../../models/legal_query.dart';
 import '../../services/membership_service.dart';
 import '../../state/auth_controller.dart';
+import '../../state/membership_checkout.dart';
 import '../../state/queries_controller.dart';
 import 'lawyer_widgets.dart';
 
@@ -34,18 +34,18 @@ class _LawyerPlanScreenState extends State<LawyerPlanScreen> {
   bool _loading = true;
 
   String _buying = '';
-  Razorpay? _razorpay;
-  MembershipOrder? _order;
+  late final MembershipCheckout _checkout;
 
   @override
   void initState() {
     super.initState();
+    _checkout = MembershipCheckout(context.read<MembershipService>());
     _load();
   }
 
   @override
   void dispose() {
-    _razorpay?.clear();
+    _checkout.dispose();
     super.dispose();
   }
 
@@ -73,80 +73,22 @@ class _LawyerPlanScreenState extends State<LawyerPlanScreen> {
   Future<void> _buy(MembershipPlan plan) async {
     if (_buying.isNotEmpty) return;
     setState(() => _buying = plan.id);
-    try {
-      _order = await context.read<MembershipService>().createOrder(plan.id);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _buying = '');
-      Toast.error(context, e.message);
-      return;
-    }
-
-    _razorpay?.clear();
-    final razorpay = Razorpay();
-    _razorpay = razorpay;
-    razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onSuccess);
-    razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onError);
-    razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (_) {});
-
-    final order = _order!;
-    try {
-      razorpay.open({
-        'key': order.keyId,
-        'order_id': order.orderId,
-        'amount': order.amountPaise,
-        'currency': order.currency,
-        'name': 'Justiceland',
-        'description': '${order.planName.isEmpty ? plan.name : order.planName} — 12 months',
-        'prefill': {
-          'name': order.prefillName,
-          'email': order.prefillEmail,
-          'contact': order.prefillContact,
-        },
-        'theme': {'color': '#1E3A5F'},
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _buying = '');
-      Toast.error(context, 'Could not open the payment screen. Please try again.');
-    }
-  }
-
-  Future<void> _onSuccess(PaymentSuccessResponse response) async {
-    try {
-      final planName = await context.read<MembershipService>().verify(
-            orderId: response.orderId ?? _order?.orderId ?? '',
-            paymentId: response.paymentId ?? '',
-            signature: response.signature ?? '',
-          );
-      if (!mounted) return;
-      setState(() => _buying = '');
-      // The plan changes credits, listing limits and placement — re-read all.
-      unawaited(context.read<AuthController>().refresh());
-      unawaited(context.read<QueriesController>().refresh(silent: true));
-      await _load();
-      if (mounted) Toast.success(context, 'You are on ${planName.isEmpty ? 'your new plan' : planName} now.');
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _buying = '');
-      // Paid but not confirmed here: the webhook grants it. Never say "failed".
-      Toast.show(
-        context,
-        e.message.isNotEmpty
-            ? e.message
-            : 'Payment received. Your plan will update shortly.',
-      );
-      unawaited(_load());
-    }
-  }
-
-  void _onError(PaymentFailureResponse response) {
+    final result = await _checkout.buy(plan.id, planLabel: plan.name);
     if (!mounted) return;
     setState(() => _buying = '');
-    if (response.code == Razorpay.PAYMENT_CANCELLED) {
-      Toast.show(context, 'Payment cancelled.');
-    } else {
-      Toast.error(context, (response.message?.isNotEmpty ?? false) ? response.message! : 'Payment failed. Please try again.');
+    switch (result.outcome) {
+      case PlanPurchaseOutcome.success:
+        // The plan changes credits, listing limits and placement — re-read all.
+        unawaited(context.read<AuthController>().refresh());
+        unawaited(context.read<QueriesController>().refresh(silent: true));
+        await _load();
+        if (mounted) Toast.success(context, result.message);
+      case PlanPurchaseOutcome.pending:
+      case PlanPurchaseOutcome.cancelled:
+        Toast.show(context, result.message);
+        unawaited(_load());
+      case PlanPurchaseOutcome.failed:
+        Toast.error(context, result.message);
     }
   }
 

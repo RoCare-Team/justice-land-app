@@ -188,28 +188,32 @@ class _AudioCallView extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.border),
             ),
-            child: Column(
-              children: [
-                Text(
-                  Fmt.clock(session.remaining),
-                  style: const TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: [FontFeature.tabularFigures()],
+            // Counts up from the moment the call was answered, ticking every
+            // second between polls.
+            child: SessionTicker(
+              builder: (context) => Column(
+                children: [
+                  Text(
+                    Fmt.clock(session.elapsed),
+                    style: const TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
                   ),
-                ),
-                Text(
-                  'remaining',
-                  style: TextStyle(fontSize: 12, color: AppColors.inkFaint),
-                ),
-                const Divider(height: 22),
-                Text(
-                  session.isResume
-                      ? 'Free resume — nothing is being charged'
-                      : '${Fmt.money(session.runningCost)} so far at ${Fmt.rate(session.rate)}',
-                  style: TextStyle(fontSize: 13, color: AppColors.inkMuted),
-                ),
-              ],
+                  Text(
+                    'call duration',
+                    style: TextStyle(fontSize: 12, color: AppColors.inkFaint),
+                  ),
+                  const Divider(height: 22),
+                  Text(
+                    session.isResume
+                        ? 'Free resume — nothing is being charged'
+                        : '${Fmt.money(session.runningCost)} so far at ${Fmt.rate(session.rate)}',
+                    style: TextStyle(fontSize: 13, color: AppColors.inkMuted),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 26),

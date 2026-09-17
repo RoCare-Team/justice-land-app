@@ -103,6 +103,7 @@ class Consultation {
     this.startedAt,
     this.endsAt,
     this.remainingMs,
+    this.clockSkewMs = 0,
     this.advocatePhoto = '',
     this.advocateProfilePath = '',
     this.charged = false,
@@ -148,6 +149,16 @@ class Consultation {
   /// Server-computed milliseconds left, read at the moment of the response.
   final int? remainingMs;
 
+  /// How far the server's clock is ahead of this phone's, in milliseconds,
+  /// worked out when the response was read (`endsAt − remainingMs` is the
+  /// server's "now"). The live figures below run on the server's clock, so a
+  /// phone set a few minutes out does not show a timer that started before
+  /// the lawyer accepted, or a balance that runs out early.
+  final int clockSkewMs;
+
+  /// "Now" on the server's clock.
+  DateTime get _serverNow => DateTime.now().add(Duration(milliseconds: clockSkewMs));
+
   // Extras the history endpoint adds for rendering a list row.
   final String advocatePhoto;
   final String advocateProfilePath;
@@ -181,16 +192,29 @@ class Consultation {
       final ms = remainingMs;
       return ms == null ? Duration.zero : Duration(milliseconds: ms);
     }
-    final left = end.difference(DateTime.now());
+    final left = end.difference(_serverNow);
     return left.isNegative ? Duration.zero : left;
+  }
+
+  /// How long the session has run, counted from the moment the lawyer
+  /// accepted (for a phone call, the moment it was answered) — never from the
+  /// booking. Zero while the request is still waiting, and it stops at the
+  /// session's end rather than running on past it. The website's live chat
+  /// and call timers count the same way.
+  Duration get elapsed {
+    final start = startedAt;
+    if (start == null) return Duration.zero;
+    var until = _serverNow;
+    final end = endsAt;
+    if (end != null && until.isAfter(end)) until = end;
+    final ran = until.difference(start);
+    return ran.isNegative ? Duration.zero : ran;
   }
 
   /// Minutes consumed so far, for the live cost meter. Rounded up, because a
   /// started minute is a billed minute — the same way the server settles it.
   int get elapsedMinutes {
-    final start = startedAt;
-    if (start == null) return 0;
-    final seconds = DateTime.now().difference(start).inSeconds;
+    final seconds = elapsed.inSeconds;
     if (seconds <= 0) return 0;
     return (seconds / 60).ceil();
   }
@@ -198,7 +222,21 @@ class Consultation {
   /// What this session has run up so far. A resume is free, so it stays ₹0.
   int get runningCost => isResume ? 0 : elapsedMinutes * rate;
 
-  factory Consultation.fromJson(Map<String, dynamic> j) => Consultation(
+  factory Consultation.fromJson(Map<String, dynamic> j) {
+    final endsAt = J.date(j['endsAt']);
+    final remainingMs = j['remainingMs'] == null ? null : J.int$(j['remainingMs']);
+    // The server stamped `remainingMs` against its own clock, so endsAt minus
+    // it is the server's time at the response. Only read while the session is
+    // still counting — a finished one reports 0 left and says nothing about now.
+    var skew = 0;
+    if (endsAt != null && remainingMs != null && remainingMs > 0) {
+      final serverNow = endsAt.millisecondsSinceEpoch - remainingMs;
+      skew = serverNow - DateTime.now().millisecondsSinceEpoch;
+      // More than a day out is bad data, not a bad clock.
+      if (skew.abs() > const Duration(days: 1).inMilliseconds) skew = 0;
+    }
+    return Consultation(
+        clockSkewMs: skew,
         id: J.id(j['id'] ?? j['_id']),
         userId: J.id(j['userId']),
         userName: J.str(j['userName']),
@@ -215,8 +253,8 @@ class Consultation {
         call: j['call'] == null ? null : CallState.fromJson(J.map(j['call'])),
         createdAt: J.date(j['createdAt']),
         startedAt: J.date(j['startedAt']),
-        endsAt: J.date(j['endsAt']),
-        remainingMs: j['remainingMs'] == null ? null : J.int$(j['remainingMs']),
+        endsAt: endsAt,
+        remainingMs: remainingMs,
         advocatePhoto: J.str(j['advocatePhoto']),
         advocateProfilePath: J.str(j['advocateProfilePath']),
         charged: J.flag(j['charged']),
@@ -229,6 +267,7 @@ class Consultation {
             ? ChatMessage.fromJson(J.map(j['lastMessage']))
             : null,
       );
+  }
 }
 
 class ChatMessage {
@@ -296,7 +335,9 @@ class CallState {
   final String endedReason;
 
   bool get isRinging => status == 'ringing';
-  bool get isConnected => status == 'connected';
+
+  /// The server calls an answered call 'active'; 'connected' is read the same.
+  bool get isConnected => status == 'active' || status == 'connected';
   bool get isOver => status == 'ended' || status == 'rejected';
   bool get isIdle => status.isEmpty || status == 'idle';
 

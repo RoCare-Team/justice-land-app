@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
 import '../../models/advocate.dart';
@@ -206,9 +207,8 @@ class AdvocateCard extends StatelessWidget {
                   ),
                   if (advocate.verified)
                     const Padding(
-                      padding: EdgeInsets.only(left: 4, top: 2),
-                      child: Icon(Icons.verified_rounded,
-                          size: 15, color: AppColors.primary),
+                      padding: EdgeInsets.only(left: 6),
+                      child: VerifiedBadge(compact: true),
                     ),
                 ],
               ),

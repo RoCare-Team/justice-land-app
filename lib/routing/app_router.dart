@@ -68,10 +68,15 @@ class AppRouter {
         // because the splash used to ask the question itself after its first
         // frame and the session often resolved first — sending a brand-new
         // install straight to the home screen.
+        // A lawyer who has just registered finishes Professional Verification
+        // and Practice Areas before the dashboard — wherever they were headed.
+        final lawyerHome = auth.lawyerOnboardingPending ? '/lawyer/onboarding' : '/lawyer';
+
         if (path == '/splash') {
-          if (auth.isAdvocate) return '/lawyer';
+          if (auth.isAdvocate) return lawyerHome;
           return showIntro ? '/onboarding' : '/';
         }
+        if (auth.lawyerOnboardingPending && path == '/lawyer') return lawyerHome;
 
         // A signed-in lawyer gets the lawyer app and nothing else. The client
         // side — the directory, services, wallet, the intro — is for people
@@ -79,7 +84,7 @@ class AppRouter {
         // reads as having been dropped into the wrong app. Anything outside
         // their own screens (an old link, a notification, a stray `go('/')`)
         // comes back to their home.
-        if (auth.isAdvocate && !_lawyerMayOpen(path)) return '/lawyer';
+        if (auth.isAdvocate && !_lawyerMayOpen(path)) return lawyerHome;
 
         // The intro and the role choice are first-launch things that show
         // themselves out; neither needs a session to be useful.

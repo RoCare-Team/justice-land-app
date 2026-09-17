@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/network/api_exception.dart';
 import '../models/account.dart';
@@ -43,6 +44,7 @@ class AuthController extends ChangeNotifier {
   Future<void> refresh() async {
     try {
       final session = await _auth.me();
+      if (session.isAdvocate && !_lawyerOnboardingPending) await _restoreOnboardingFlag();
       _apply(session);
     } on ApiException {
       // A failed read is not proof of being signed out — it could be the
@@ -153,6 +155,10 @@ class AuthController extends ChangeNotifier {
     try {
       final created =
           await _auth.signUpAdvocate(name: name, email: email, city: city);
+      // Set before the session is adopted: adopting it rebuilds the router,
+      // and the router reads this to send the new lawyer on to verification
+      // and practice areas rather than straight to an empty dashboard.
+      await setLawyerOnboardingPending(true);
       // Signing up signs the lawyer in, so adopt that session.
       await refresh();
       return created;
@@ -165,9 +171,44 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  // ── New-lawyer onboarding ────────────────────────────────────────────────
+
+  static const _onboardingKey = 'lawyer_onboarding_pending';
+  bool _lawyerOnboardingPending = false;
+
+  /// A lawyer who has just created their account and not yet been through
+  /// Professional Verification and Practice Areas. Kept on this install so
+  /// closing the app halfway resumes where they left off.
+  bool get lawyerOnboardingPending => _lawyerOnboardingPending && isAdvocate;
+
+  Future<void> setLawyerOnboardingPending(bool value) async {
+    _lawyerOnboardingPending = value;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (value) {
+        await prefs.setBool(_onboardingKey, true);
+      } else {
+        await prefs.remove(_onboardingKey);
+      }
+    } catch (_) {
+      // Storage is a convenience; the flag still holds for this run.
+    }
+    notifyListeners();
+  }
+
+  Future<void> _restoreOnboardingFlag() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _lawyerOnboardingPending = prefs.getBool(_onboardingKey) ?? false;
+    } catch (_) {
+      // Leave it as it is.
+    }
+  }
+
   // ── Session upkeep ───────────────────────────────────────────────────────
 
   Future<void> signOut() async {
+    await setLawyerOnboardingPending(false);
     await _auth.logout();
     _user = null;
     _advocate = null;

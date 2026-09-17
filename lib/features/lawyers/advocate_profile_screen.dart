@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/config/consultation_slots.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
@@ -259,13 +260,12 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                             style: Theme.of(context).textTheme.headlineMedium,
                           ),
                         ),
-                        if (advocate.verified) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.verified_rounded,
-                              size: 20, color: AppColors.primary),
-                        ],
                       ],
                     ),
+                    if (advocate.verified) ...[
+                      const SizedBox(height: 6),
+                      const VerifiedBadge(),
+                    ],
                     if (advocate.tagline.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(

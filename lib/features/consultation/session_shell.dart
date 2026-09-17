@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,7 +10,7 @@ import '../../models/consultation.dart';
 import '../../state/auth_controller.dart';
 
 /// The live meter every consultation screen carries: who you are talking to,
-/// how long is left, and what it has cost so far.
+/// how long it has run since the lawyer accepted, and what it has cost so far.
 ///
 /// Showing the running cost is not decoration. The session bills by the minute
 /// against a wallet, and a client who cannot see the meter cannot make an
@@ -74,42 +76,62 @@ class SessionHeader extends StatelessWidget {
           ),
           if (live) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.muted,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+            // Ticks every second between polls, so the timer moves like a
+            // clock rather than jumping two seconds at a time.
+            SessionTicker(
+              builder: (context) => Column(
                 children: [
-                  _meter(
-                    Icons.timer_outlined,
-                    'Time left',
-                    Fmt.clock(session.remaining),
-                    warn: session.remaining.inMinutes < 2,
-                  ),
                   Container(
-                    height: 26,
-                    width: 1,
-                    color: AppColors.border,
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.muted,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        // How long it has run since the lawyer accepted — the
+                        // same count-up the website shows, starting at 00:00.
+                        _meter(
+                          Icons.timer_outlined,
+                          'Duration',
+                          Fmt.clock(session.elapsed),
+                        ),
+                        Container(
+                          height: 26,
+                          width: 1,
+                          color: AppColors.border,
+                          margin: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        _meter(
+                          Icons.currency_rupee_rounded,
+                          session.isResume ? 'Free resume' : 'Cost so far',
+                          session.isResume ? '₹0' : Fmt.money(session.runningCost),
+                        ),
+                        Container(
+                          height: 26,
+                          width: 1,
+                          color: AppColors.border,
+                          margin: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        _meter(
+                          Icons.speed_rounded,
+                          'Rate',
+                          session.isResume ? '—' : '₹${session.rate}/min',
+                        ),
+                      ],
+                    ),
                   ),
-                  _meter(
-                    Icons.currency_rupee_rounded,
-                    session.isResume ? 'Free resume' : 'Cost so far',
-                    session.isResume ? '₹0' : Fmt.money(session.runningCost),
-                  ),
-                  Container(
-                    height: 26,
-                    width: 1,
-                    color: AppColors.border,
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                  ),
-                  _meter(
-                    Icons.speed_rounded,
-                    'Rate',
-                    session.isResume ? '—' : '₹${session.rate}/min',
-                  ),
+                  // The wallet ceiling only matters when it is close.
+                  if (session.endsAt != null && session.remaining.inMinutes < 2) ...[
+                    const SizedBox(height: 8),
+                    NoticeBanner(
+                      tone: ChipTone.danger,
+                      icon: Icons.hourglass_bottom_rounded,
+                      message: viewerIsAdvocate
+                          ? 'The client\'s balance runs out in ${Fmt.clock(session.remaining)} — the session ends then.'
+                          : 'Your balance runs out in ${Fmt.clock(session.remaining)} — the session ends then.',
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -161,6 +183,38 @@ class SessionHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Rebuilds its child once a second, for live timers that must keep moving
+/// between the two-second session polls.
+class SessionTicker extends StatefulWidget {
+  const SessionTicker({super.key, required this.builder});
+
+  final WidgetBuilder builder;
+
+  @override
+  State<SessionTicker> createState() => _SessionTickerState();
+}
+
+class _SessionTickerState extends State<SessionTicker> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
 }
 
 /// What a screen shows while a request is still pending.

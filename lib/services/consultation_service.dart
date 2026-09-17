@@ -154,12 +154,23 @@ class ConsultationService {
 
   /// Reads the other side's description and any ICE candidates newer than
   /// [since].
+  ///
+  /// The server nests the call — `{ call: { id, status, offer, answer },
+  /// candidates, nextSince }` — and reading it flat left the offer and answer
+  /// always empty: the lawyer never answered, the client never connected, and
+  /// both sat on "Connecting…". The two halves are merged here.
   Future<CallState> callState(String id, {int since = 0}) async {
     final data = await _api.get(
       Endpoints.consultationCall(id),
       query: {'since': since},
     );
-    return CallState.fromJson(J.map(data));
+    final map = J.map(data);
+    final call = J.map(map['call']);
+    return CallState.fromJson({
+      ...call,
+      'candidates': map['candidates'] ?? call['candidates'],
+      'cursor': map['nextSince'] ?? map['cursor'] ?? since,
+    });
   }
 
   /// The client rings — same direction as the booking itself.

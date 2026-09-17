@@ -110,6 +110,8 @@ class Endpoints {
   static const String consultationInbox = '/api/consultations';
 
   /// POST { advocateId, type, resumeFrom? } → { ok, session }
+  /// Per minute at the lawyer's rate: 400 if they do not offer the channel,
+  /// 402 `insufficient` when the wallet cannot cover the first minute.
   static const String consultationCreate = '/api/consultations';
 
   /// GET ?scope=mine → { consultations } — the signed-in participant's own
@@ -232,6 +234,12 @@ class Endpoints {
   /// GET → the lawyer's editable profile
   /// PUT → save it · PATCH → availability toggle · DELETE → close account
   static const String dashboardProfile = '/api/dashboard/profile';
+
+  /// GET → { documents: [{ id, kind, label, fileName, mimeType, size, uploadedAt }] }
+  /// POST multipart { kind: 'bar_council_certificate' | 'government_id', file }
+  /// → 201 { document }. PDF, JPG or PNG, max 5 MB; uploading a kind again
+  /// replaces it. Stored privately — only the lawyer and admins can open them.
+  static const String verificationDocuments = '/api/dashboard/verification-documents';
 
   // ── Membership plans (lawyers) ───────────────────────────────────────────
   //
