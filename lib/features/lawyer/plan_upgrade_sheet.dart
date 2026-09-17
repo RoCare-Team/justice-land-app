@@ -198,6 +198,7 @@ class _PlanUpgradeSheetState extends State<PlanUpgradeSheet> {
             children: [
               Tag(label: limit(plan.areas, 'practice areas')),
               Tag(label: limit(plan.matters, 'matters')),
+              Tag(label: limit(plan.cities, 'other cities')),
               if (plan.queryCredits > 0) Tag(label: '${plan.queryCredits} query credits/month', tone: AppColors.success),
             ],
           ),

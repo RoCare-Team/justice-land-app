@@ -36,6 +36,9 @@ class BookingSheet extends StatefulWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      // Above the bottom tab bar: opened from a card on a tab, the nearest
+      // navigator is the tab shell's, and the bar would cover the Start button.
+      useRootNavigator: true,
       builder: (_) => BookingSheet(advocate: advocate, type: type),
     );
   }

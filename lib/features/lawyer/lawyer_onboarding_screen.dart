@@ -18,26 +18,24 @@ import '../../services/membership_service.dart';
 import '../../state/auth_controller.dart';
 import 'plan_upgrade_sheet.dart';
 
-const Color _blue = Color(0xFF2563EB);
-const Color _blueDark = Color(0xFF1D4ED8);
 const int _maxBytes = 5 * 1024 * 1024;
 
-/// The two documents asked for, in the order a lawyer has them to hand.
-const List<({String kind, String title, IconData icon, Color tint})> _docKinds = [
-  (kind: 'bar_council_certificate', title: 'Bar Council Certificate', icon: Icons.description_outlined, tint: Color(0xFF475569)),
-  (kind: 'government_id', title: 'Government ID Proof', icon: Icons.badge_outlined, tint: Color(0xFF059669)),
+const List<({String kind, String title, IconData icon})> _docKinds = [
+  (kind: 'bar_council_certificate', title: 'Bar Council Certificate', icon: Icons.description_outlined),
+  (kind: 'government_id', title: 'Government ID Proof', icon: Icons.badge_outlined),
 ];
 
-/// A new lawyer's setup, straight after Basic Details: the fields an admin
-/// needs to verify them, then what they practise.
+/// A new lawyer's setup after Basic Details, in the app's own look:
 ///
-///   1. Basic Details           — name, email, city (already done at signup)
-///   2. Professional Verification — Bar Council ID, certificate, government ID
-///   3. Practice Areas          — areas, then the matters under each
+///   1. Basic Details            — done at signup
+///   2. Verification             — Bar Council ID, certificate, government ID
+///   3. Practice                 — the website's "Legal Services" section:
+///                                 practice areas, the matters under each,
+///                                 the cities they work in, in-person fee
 ///
-/// Practice areas are chosen the way the website does it: pick an area and
-/// its matters open beneath it. A choice the plan does not cover opens the
-/// plans right there, as the website's upgrade modal does.
+/// Limits are the plan's, as on the website — Starter covers 2 practice areas,
+/// 4 matters and 2 other cities. A choice past that opens the plans; paying
+/// there lifts the limit and the choice goes through.
 class LawyerOnboardingScreen extends StatefulWidget {
   const LawyerOnboardingScreen({super.key});
 
@@ -46,25 +44,24 @@ class LawyerOnboardingScreen extends StatefulWidget {
 }
 
 class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
-  int _step = 0; // 0 = verification, 1 = practice areas
+  int _step = 0; // 0 = verification, 1 = practice
 
+  // Verification
   final _barCouncil = TextEditingController();
   Map<String, VerificationDocument> _docs = {};
   String _uploading = '';
 
+  // Practice
   List<LegalService> _services = [];
+  List<String> _cityOptions = [];
   PlanCatalog? _catalog;
-  final Set<String> _areas = {};
-  final Set<String> _matters = {};
-
-  /// In-person (physical) consultations: `null` until the lawyer answers.
-  /// A "yes" needs a price per visit — the same `consultationFee` the website
-  /// shows as "In-Person … /visit" and filters on.
+  final List<String> _areas = [];
+  final List<String> _matters = [];
+  final List<String> _cities = [];
+  final _citySearch = TextEditingController();
+  String _baseCity = '';
   bool? _inPerson;
   final _fee = TextEditingController();
-
-  int get _feeValue => int.tryParse(_fee.text.trim()) ?? 0;
-  bool get _inPersonReady => _inPerson == false || (_inPerson == true && _feeValue > 0);
 
   bool _loading = true;
   bool _saving = false;
@@ -73,17 +70,19 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    final advocate = context.read<AuthController>().advocate;
-    _barCouncil.text = advocate?.barCouncilNumber ?? '';
-    _areas.addAll(advocate?.specializations ?? const []);
-    _matters.addAll(advocate?.subSpecializations ?? const []);
-    _barCouncil.addListener(() => setState(() {}));
-    final fee = advocate?.consultationFee ?? 0;
-    if (fee > 0) {
+    final a = context.read<AuthController>().advocate;
+    _barCouncil.text = a?.barCouncilNumber ?? '';
+    _areas.addAll(a?.specializations ?? const []);
+    _matters.addAll(a?.subSpecializations ?? const []);
+    _baseCity = (a?.city ?? '').trim();
+    _cities.addAll((a?.practiceCities ?? const []).where((c) => !_isBase(c)));
+    if ((a?.consultationFee ?? 0) > 0) {
       _inPerson = true;
-      _fee.text = '$fee';
+      _fee.text = '${a!.consultationFee}';
     }
-    _fee.addListener(() => setState(() {}));
+    for (final c in [_barCouncil, _fee, _citySearch]) {
+      c.addListener(() => setState(() {}));
+    }
     _load();
   }
 
@@ -91,24 +90,27 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
   void dispose() {
     _barCouncil.dispose();
     _fee.dispose();
+    _citySearch.dispose();
     super.dispose();
   }
+
+  bool _isBase(String city) => city.trim().toLowerCase() == _baseCity.toLowerCase();
 
   Future<void> _load() async {
     final dashboard = context.read<DashboardService>();
     final content = context.read<ContentService>();
     final membership = context.read<MembershipService>();
     try {
-      final results = await Future.wait([
-        dashboard.verificationDocuments().catchError((_) => <String, VerificationDocument>{}),
-        content.services(),
-        membership.catalog(),
-      ]);
+      final docs = await dashboard.verificationDocuments().catchError((_) => <String, VerificationDocument>{});
+      final services = await content.services();
+      final cities = await content.cities().catchError((_) => <City>[]);
+      final catalog = await membership.catalog();
       if (!mounted) return;
       setState(() {
-        _docs = results[0] as Map<String, VerificationDocument>;
-        _services = results[1] as List<LegalService>;
-        _catalog = results[2] as PlanCatalog;
+        _docs = docs;
+        _services = services;
+        _cityOptions = cities.map((c) => c.name).where((n) => !_isBase(n)).toList();
+        _catalog = catalog;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -120,12 +122,102 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
     }
   }
 
-  // ── Step 2: verification ─────────────────────────────────────────────────
+  // ── Plan ─────────────────────────────────────────────────────────────────
 
-  bool get _verificationReady =>
-      _barCouncil.text.trim().length >= 3 &&
-      _docKinds.every((d) => _docs.containsKey(d.kind)) &&
-      _uploading.isEmpty;
+  MembershipPlan? get _plan {
+    final c = _catalog;
+    if (c == null) return null;
+    for (final p in c.plans) {
+      if (p.id == c.currentPlanId) return p;
+    }
+    return c.plans.isEmpty ? null : c.plans.first;
+  }
+
+  /// Opens the plans. On a successful upgrade re-reads the limits and runs
+  /// [andThen], so the choice that was refused goes through.
+  Future<void> _upgradeFor(String reason, VoidCallback andThen) async {
+    final catalog = _catalog;
+    if (catalog == null) return;
+    final upgraded = await PlanUpgradeSheet.open(context, catalog: catalog, reason: reason);
+    if (!upgraded || !mounted) return;
+    try {
+      final fresh = await context.read<MembershipService>().catalog();
+      if (!mounted) return;
+      setState(() => _catalog = fresh);
+      andThen();
+    } on ApiException {
+      // The sheet already said the plan is on its way.
+    }
+  }
+
+  String _limitText(int used, int? limit, String noun, String plural) {
+    final plan = _plan;
+    if (plan == null) return '';
+    if (limit == null) return '$used ${used == 1 ? noun : plural} — no limit on your ${plan.name} plan';
+    return '$used of $limit ${limit == 1 ? noun : plural} used on your ${plan.name} plan';
+  }
+
+  void _toggleArea(LegalService area) {
+    if (_areas.contains(area.name)) {
+      setState(() {
+        _areas.remove(area.name);
+        _matters.removeWhere((m) => area.subServices.any((s) => s.name == m));
+      });
+      return;
+    }
+    final plan = _plan;
+    void add() => setState(() => _areas.add(area.name));
+    if (plan != null && !plan.allowsAreas(_areas.length + 1)) {
+      _upgradeFor(
+        '“${area.name}” needs a bigger plan. ${plan.name} covers ${plan.areas} practice '
+        '${plan.areas == 1 ? 'area' : 'areas'}, and you have used them all.',
+        add,
+      );
+      return;
+    }
+    add();
+  }
+
+  void _toggleMatter(String matter) {
+    if (_matters.contains(matter)) {
+      setState(() => _matters.remove(matter));
+      return;
+    }
+    final plan = _plan;
+    void add() => setState(() => _matters.add(matter));
+    if (plan != null && !plan.allowsMatters(_matters.length + 1)) {
+      _upgradeFor(
+        '“$matter” needs a bigger plan. ${plan.name} covers ${plan.matters} '
+        '${plan.matters == 1 ? 'matter' : 'matters'}, and you have used them all.',
+        add,
+      );
+      return;
+    }
+    add();
+  }
+
+  void _toggleCity(String city) {
+    if (_cities.contains(city)) {
+      setState(() => _cities.remove(city));
+      return;
+    }
+    final plan = _plan;
+    void add() => setState(() {
+          _cities.add(city);
+          _citySearch.clear();
+        });
+    if (plan != null && !plan.allowsCities(_cities.length + 1)) {
+      _upgradeFor(
+        '“$city” needs a bigger plan. ${plan.name} covers ${plan.cities} other '
+        '${plan.cities == 1 ? 'city' : 'cities'}, and you have used them all.',
+        add,
+      );
+      return;
+    }
+    add();
+  }
+
+  // ── Documents ────────────────────────────────────────────────────────────
 
   Future<void> _pick(String kind) async {
     if (_uploading.isNotEmpty) return;
@@ -139,19 +231,14 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
       Toast.error(context, 'That file is over 5 MB. Please choose a smaller one.');
       return;
     }
-
-    setState(() {
-      _uploading = kind;
-      _error = '';
-    });
+    setState(() => _uploading = kind);
     try {
       final doc = await context.read<DashboardService>().uploadVerificationDocument(
             kind: kind,
             filePath: file.path!,
             fileName: file.name,
           );
-      if (!mounted) return;
-      setState(() => _docs = {..._docs, kind: doc});
+      if (mounted) setState(() => _docs = {..._docs, kind: doc});
     } on ApiException catch (e) {
       if (mounted) Toast.error(context, e.message);
     } finally {
@@ -159,69 +246,15 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
     }
   }
 
-  // ── Step 3: practice areas ───────────────────────────────────────────────
+  // ── Steps ────────────────────────────────────────────────────────────────
 
-  MembershipPlan? get _plan {
-    final c = _catalog;
-    if (c == null) return null;
-    for (final p in c.plans) {
-      if (p.id == c.currentPlanId) return p;
-    }
-    return c.plans.isEmpty ? null : c.plans.first;
-  }
+  int get _feeValue => int.tryParse(_fee.text.trim()) ?? 0;
 
-  Future<void> _toggleArea(LegalService area) async {
-    if (_areas.contains(area.name)) {
-      setState(() {
-        _areas.remove(area.name);
-        _matters.removeAll(area.subServices.map((m) => m.name));
-      });
-      return;
-    }
-    final plan = _plan;
-    if (plan != null && !plan.allowsAreas(_areas.length + 1)) {
-      final upgraded = await _offerUpgrade(
-        'Your ${plan.name} plan covers ${plan.areas} practice ${plan.areas == 1 ? 'area' : 'areas'}. '
-        'Upgrade to add ${area.name}.',
-      );
-      if (!upgraded || !mounted) return;
-    }
-    setState(() => _areas.add(area.name));
-  }
-
-  Future<void> _toggleMatter(String matter) async {
-    if (_matters.contains(matter)) {
-      setState(() => _matters.remove(matter));
-      return;
-    }
-    final plan = _plan;
-    if (plan != null && !plan.allowsMatters(_matters.length + 1)) {
-      final upgraded = await _offerUpgrade(
-        'Your ${plan.name} plan covers ${plan.matters} ${plan.matters == 1 ? 'matter' : 'matters'}. '
-        'Upgrade to add $matter.',
-      );
-      if (!upgraded || !mounted) return;
-    }
-    setState(() => _matters.add(matter));
-  }
-
-  /// Opens the plans; on a successful upgrade, re-reads the limits so the
-  /// choice that was refused goes through.
-  Future<bool> _offerUpgrade(String reason) async {
-    final catalog = _catalog;
-    if (catalog == null) return false;
-    final upgraded = await PlanUpgradeSheet.open(context, catalog: catalog, reason: reason);
-    if (!upgraded || !mounted) return false;
-    try {
-      final fresh = await context.read<MembershipService>().catalog();
-      if (mounted) setState(() => _catalog = fresh);
-    } on ApiException {
-      return false;
-    }
-    return true;
-  }
-
-  // ── Navigation ───────────────────────────────────────────────────────────
+  bool get _canContinue => _step == 0
+      ? _barCouncil.text.trim().length >= 3 &&
+          _docKinds.every((d) => _docs.containsKey(d.kind)) &&
+          _uploading.isEmpty
+      : _areas.isNotEmpty && (_inPerson == false || (_inPerson == true && _feeValue > 0));
 
   Future<void> _continue() async {
     setState(() {
@@ -232,17 +265,16 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
     try {
       if (_step == 0) {
         await dashboard.saveProfile({'barCouncil': _barCouncil.text.trim()});
-        if (!mounted) return;
-        setState(() => _step = 1);
+        if (mounted) setState(() => _step = 1);
       } else {
         await dashboard.saveProfile({
-          'services': _areas.toList(),
-          'subServices': _matters.toList(),
-          // 0 means "not offered" — the website hides the in-person price then.
+          'services': _areas,
+          'subServices': _matters,
+          'practiceCities': _cities,
+          // 0 means in-person is not offered.
           'fee': _inPerson == true ? '$_feeValue' : '0',
         });
-        if (!mounted) return;
-        await _finish('You are all set. Our team will verify your documents shortly.');
+        if (mounted) await _finish('You are all set. We will verify your documents shortly.');
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -262,139 +294,140 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ready = _step == 0 ? _verificationReady : _areas.isNotEmpty && _inPersonReady;
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _step == 1 && !_saving) setState(() => _step = 0);
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF1F5FF),
-        body: Column(
-          children: [
-            _header(),
-            Expanded(
-              child: _loading
-                  ? const LoadingView(label: 'Getting things ready…')
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      children: [
-                        if (_step == 0) ..._verificationStep() else ..._practiceStep(),
-                        if (_error.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          NoticeBanner(tone: ChipTone.danger, icon: Icons.error_outline_rounded, message: _error),
-                        ],
-                        const SizedBox(height: 8),
-                        Center(
-                          child: TextButton(
-                            onPressed: _saving ? null : () => _finish('You can finish this any time from your profile.'),
-                            child: Text('I\'ll finish this later', style: TextStyle(color: AppColors.inkFaint)),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: FilledButton(
-                    onPressed: ready && !_saving && !_loading ? _continue : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _blue,
-                      disabledBackgroundColor: const Color(0xFFE2E8F0),
-                      disabledForegroundColor: const Color(0xFF94A3B8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                    ),
-                    child: _saving
-                        ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                        : Text(_step == 0 ? 'Continue' : 'Finish setup'),
-                  ),
-                ),
-              ),
+        backgroundColor: AppColors.muted,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          leading: _step == 1
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _saving ? null : () => setState(() => _step = 0),
+                )
+              : null,
+          title: const Text('Complete your profile'),
+          actions: [
+            TextButton(
+              onPressed: _saving ? null : () => _finish('You can finish this any time from your profile.'),
+              child: const Text('Later'),
             ),
           ],
+        ),
+        body: _loading
+            ? const LoadingView(label: 'Getting things ready…')
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  _StepRail(current: _step + 1),
+                  const SizedBox(height: 20),
+                  Text(
+                    _step == 0 ? 'Professional verification' : 'Your practice',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _step == 0
+                        ? 'We check these before your profile goes live. They are never shown to clients.'
+                        : 'What you practise and where. How many you can list depends on your plan.',
+                    style: TextStyle(fontSize: 13.5, height: 1.45, color: AppColors.inkMuted),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_step == 0) ..._verification() else ..._practice(),
+                  if (_error.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    NoticeBanner(tone: ChipTone.danger, icon: Icons.error_outline_rounded, message: _error),
+                  ],
+                ],
+              ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: PrimaryButton(
+              label: _step == 0 ? 'Continue' : 'Finish setup',
+              busy: _saving,
+              onPressed: _canContinue && !_loading ? _continue : null,
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _header() {
-    final title = _step == 0 ? 'Professional Verification' : 'Practice Areas';
-    final subtitle = _step == 0
-        ? 'Verify your credentials to start accepting clients'
-        : 'Choose what you practise — matters open under each area';
-    // Basic Details is done before this screen, so the first segment is full.
-    final filled = _step + 2;
+  // ── Verification step ────────────────────────────────────────────────────
 
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(colors: [_blue, _blueDark]),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 16, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  List<Widget> _verification() => [
+        _Section(
+          title: 'Bar Council ID',
+          icon: Icons.gavel_rounded,
+          children: [
+            TextField(
+              controller: _barCouncil,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(hintText: 'e.g. D/1234/2015'),
+            ),
+          ],
+        ),
+        _Section(
+          title: 'Documents',
+          icon: Icons.folder_open_rounded,
+          subtitle: 'PDF, JPG or PNG, up to 5 MB each.',
+          children: [
+            for (var i = 0; i < _docKinds.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _docTile(_docKinds[i]),
+            ],
+          ],
+        ),
+      ];
+
+  Widget _docTile(({String kind, String title, IconData icon}) d) {
+    final doc = _docs[d.kind];
+    final busy = _uploading == d.kind;
+    return Material(
+      color: doc != null ? AppColors.successSoft : AppColors.muted,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: busy ? null : () => _pick(d.kind),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: doc != null ? AppColors.success.withValues(alpha: 0.35) : AppColors.border),
+          ),
+          child: Row(
             children: [
-              SizedBox(
-                height: 40,
-                child: _step == 1
-                    ? IconButton(
-                        onPressed: _saving ? null : () => setState(() => _step = 0),
-                        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                      )
-                    : null,
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
+              Icon(doc != null ? Icons.check_circle_rounded : d.icon, color: doc != null ? AppColors.success : AppColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(d.title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
                     Text(
-                      'Step ${_step + 2} of 3',
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(fontSize: 14, color: Colors.white70)),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        for (var i = 0; i < 3; i++) ...[
-                          if (i > 0) const SizedBox(width: 6),
-                          Expanded(
-                            child: Container(
-                              height: 5,
-                              decoration: BoxDecoration(
-                                color: i < filled ? Colors.white : Colors.white24,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    const Row(
-                      children: [
-                        Expanded(child: Text('Basic Details', style: TextStyle(fontSize: 11, color: Colors.white70))),
-                        Expanded(child: Text('Verification', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.white70))),
-                        Expanded(child: Text('Practice Areas', textAlign: TextAlign.end, style: TextStyle(fontSize: 11, color: Colors.white70))),
-                      ],
+                      busy ? 'Uploading…' : doc != null ? doc.fileName : 'Not uploaded',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: doc != null ? AppColors.success : AppColors.inkFaint),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              busy
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.2))
+                  : Text(
+                      doc != null ? 'Replace' : 'Upload',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                    ),
             ],
           ),
         ),
@@ -402,306 +435,239 @@ class _LawyerOnboardingScreenState extends State<LawyerOnboardingScreen> {
     );
   }
 
-  Widget _card({required String title, required List<Widget> children, String? trailing}) {
+  // ── Practice step ────────────────────────────────────────────────────────
+
+  List<Widget> _practice() {
+    final plan = _plan;
+    final chosen = _services.where((s) => _areas.contains(s.name) && s.subServices.isNotEmpty).toList();
+    final query = _citySearch.text.trim().toLowerCase();
+    final cityMatches = query.isEmpty
+        ? const <String>[]
+        : _cityOptions.where((c) => c.toLowerCase().contains(query) && !_cities.contains(c)).take(8).toList();
+
+    return [
+      _Section(
+        title: 'Legal services',
+        icon: Icons.balance_rounded,
+        subtitle: _limitText(_areas.length, plan?.areas, 'practice area', 'practice areas'),
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final s in _services)
+                SelectableChip(label: s.name, selected: _areas.contains(s.name), onTap: () => _toggleArea(s)),
+            ],
+          ),
+        ],
+      ),
+      if (chosen.isNotEmpty)
+        _Section(
+          title: 'Matters you handle (optional)',
+          icon: Icons.checklist_rounded,
+          subtitle: _limitText(_matters.length, plan?.matters, 'matter', 'matters'),
+          children: [
+            for (final area in chosen) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  area.name.toUpperCase(),
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.primary),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final m in area.subServices)
+                    SelectableChip(label: m.name, selected: _matters.contains(m.name), onTap: () => _toggleMatter(m.name)),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
+        ),
+      _Section(
+        title: 'Cities you work in',
+        icon: Icons.location_city_rounded,
+        subtitle: '${_baseCity.isEmpty ? '' : '$_baseCity is included. '}'
+            '${_limitText(_cities.length, plan?.cities, 'other city', 'other cities')}',
+        children: [
+          if (_cities.isNotEmpty) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final c in _cities) SelectableChip(label: c, selected: true, onTap: () => _toggleCity(c)),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          TextField(
+            controller: _citySearch,
+            decoration: const InputDecoration(
+              hintText: 'Search a city to add',
+              prefixIcon: Icon(Icons.search_rounded, size: 20),
+            ),
+          ),
+          if (cityMatches.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final c in cityMatches) SelectableChip(label: c, selected: false, onTap: () => _toggleCity(c)),
+              ],
+            ),
+          ],
+        ],
+      ),
+      _Section(
+        title: 'In-person consultation',
+        icon: Icons.meeting_room_outlined,
+        subtitle: 'Are you available for physical consultations at your office?',
+        children: [
+          Row(
+            children: [
+              Expanded(child: _choice('Yes', true)),
+              const SizedBox(width: 10),
+              Expanded(child: _choice('No', false)),
+            ],
+          ),
+          if (_inPerson == true) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _fee,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              decoration: const InputDecoration(
+                labelText: 'Fee per visit',
+                prefixText: '₹ ',
+                counterText: '',
+                helperText: 'Shown on your profile as the in-person price.',
+              ),
+            ),
+          ],
+        ],
+      ),
+    ];
+  }
+
+  Widget _choice(String label, bool value) {
+    final selected = _inPerson == value;
+    return OutlinedButton(
+      onPressed: _saving ? null : () => setState(() => _inPerson = value),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(46),
+        backgroundColor: selected ? AppColors.primary.withValues(alpha: 0.08) : null,
+        foregroundColor: selected ? AppColors.primary : AppColors.inkMuted,
+        side: BorderSide(color: selected ? AppColors.primary : AppColors.border, width: selected ? 1.6 : 1),
+      ),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+/// Basic details · Verification · Practice — the same rail the signup screen
+/// uses, carried on from where it stopped.
+class _StepRail extends StatelessWidget {
+  const _StepRail({required this.current});
+
+  /// 0-based index of the active step (Basic details is always done here).
+  final int current;
+
+  static const _labels = ['Basic details', 'Verification', 'Practice'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < _labels.length; i++) ...[
+          _dot(i),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              _labels[i],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: i <= current ? AppColors.ink.withValues(alpha: 0.8) : AppColors.ink.withValues(alpha: 0.35),
+              ),
+            ),
+          ),
+          if (i < _labels.length - 1)
+            Expanded(
+              child: Container(
+                height: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: i < current ? AppColors.success.withValues(alpha: 0.6) : AppColors.ink.withValues(alpha: 0.12),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _dot(int i) {
+    final done = i < current;
+    final active = i == current;
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: done ? AppColors.success : active ? AppColors.primary : AppColors.ink.withValues(alpha: 0.1),
+      ),
+      child: done
+          ? const Icon(Icons.check, size: 13, color: Colors.white)
+          : Text(
+              '${i + 1}',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: active ? Colors.white : AppColors.ink.withValues(alpha: 0.4)),
+            ),
+    );
+  }
+}
+
+/// A plain white section with a title — the app's standard form panel.
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.icon, required this.children, this.subtitle});
+
+  final String title;
+  final IconData icon;
+  final String? subtitle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-              ),
-              if (trailing != null)
-                Text(trailing, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.inkFaint)),
+              Icon(icon, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700))),
             ],
           ),
-          const SizedBox(height: 14),
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(subtitle!, style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.inkMuted)),
+          ],
+          const SizedBox(height: 12),
           ...children,
         ],
-      ),
-    );
-  }
-
-  List<Widget> _verificationStep() => [
-        _card(
-          title: 'Bar Council Details',
-          children: [
-            const Text('Bar Council ID *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _barCouncil,
-              textCapitalization: TextCapitalization.characters,
-              style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                hintText: 'e.g. D/1234/2015',
-                filled: true,
-                fillColor: const Color(0xFFF8FAFF),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: _blue, width: 1.8),
-                ),
-              ),
-            ),
-          ],
-        ),
-        _card(
-          title: 'Document Upload',
-          children: [
-            for (var i = 0; i < _docKinds.length; i++) ...[
-              if (i > 0) Divider(height: 22, color: AppColors.border),
-              _docRow(_docKinds[i]),
-            ],
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.inkFaint),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Kept private — seen only by the Justiceland team to verify you, never shown on your profile.',
-                    style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.inkFaint),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ];
-
-  Widget _docRow(({String kind, String title, IconData icon, Color tint}) d) {
-    final doc = _docs[d.kind];
-    final busy = _uploading == d.kind;
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: busy ? null : () => _pick(d.kind),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Container(
-              height: 52,
-              width: 52,
-              decoration: BoxDecoration(
-                color: doc != null ? AppColors.successSoft : d.tint.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(doc != null ? Icons.check_circle_rounded : d.icon, color: doc != null ? AppColors.success : d.tint),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(d.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text(
-                    busy
-                        ? 'Uploading…'
-                        : doc != null
-                            ? '${doc.fileName.isEmpty ? 'Uploaded' : doc.fileName} · tap to replace'
-                            : 'PDF, JPG or PNG (max 5 MB)',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: doc != null ? AppColors.success : AppColors.inkFaint),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              height: 44,
-              width: 44,
-              decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(12)),
-              child: busy
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(strokeWidth: 2.2, color: _blue),
-                    )
-                  : Icon(doc != null ? Icons.refresh_rounded : Icons.upload_rounded, color: _blue),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _practiceStep() {
-    final plan = _plan;
-    String limit(int? n) => n == null ? '' : ' of $n';
-
-    return [
-      _card(
-        title: 'Practice areas',
-        trailing: '${_areas.length}${limit(plan?.areas)} selected',
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final s in _services) _chip(s.name, _areas.contains(s.name), () => _toggleArea(s)),
-            ],
-          ),
-          if (plan?.areas != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              '${plan!.name} plan: up to ${plan.areas} areas and ${plan.matters} matters. Pick more to see the plans.',
-              style: TextStyle(fontSize: 12, color: AppColors.inkFaint),
-            ),
-          ],
-        ],
-      ),
-      for (final area in _services.where((s) => _areas.contains(s.name)))
-        if (area.subServices.isNotEmpty)
-          _card(
-            title: area.name,
-            trailing: '${area.subServices.where((m) => _matters.contains(m.name)).length} chosen',
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final m in area.subServices)
-                    _chip(m.name, _matters.contains(m.name), () => _toggleMatter(m.name)),
-                ],
-              ),
-            ],
-          ),
-      if (_areas.isNotEmpty && plan?.matters != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            '${_matters.length}${limit(plan?.matters)} matters selected',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.inkMuted),
-          ),
-        ),
-      _inPersonCard(),
-    ];
-  }
-
-  Widget _inPersonCard() {
-    Widget option(bool value, String label, IconData icon) {
-      final selected = _inPerson == value;
-      return Expanded(
-        child: Material(
-          color: selected ? _blue.withValues(alpha: 0.08) : const Color(0xFFF8FAFF),
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: _saving ? null : () => setState(() => _inPerson = value),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: selected ? _blue : AppColors.border, width: selected ? 1.8 : 1),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 18, color: selected ? _blue : AppColors.inkFaint),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: selected ? _blue : AppColors.inkMuted),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return _card(
-      title: 'In-person consultation',
-      children: [
-        Text(
-          'Are you available for physical (in-person) consultations at your office? *',
-          style: TextStyle(fontSize: 14, height: 1.4, color: AppColors.ink.withValues(alpha: 0.8)),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            option(true, 'Yes', Icons.check_circle_outline_rounded),
-            const SizedBox(width: 10),
-            option(false, 'No', Icons.cancel_outlined),
-          ],
-        ),
-        if (_inPerson == true) ...[
-          const SizedBox(height: 16),
-          const Text('Your fee per visit *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _fee,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            maxLength: 6,
-            style: const TextStyle(fontSize: 16),
-            decoration: InputDecoration(
-              prefixText: '₹ ',
-              hintText: 'e.g. 1000',
-              counterText: '',
-              filled: true,
-              fillColor: const Color(0xFFF8FAFF),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: _blue, width: 1.8),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Shown on your profile as “In-Person ₹… /visit”. You can change it any time.',
-            style: TextStyle(fontSize: 12, color: AppColors.inkFaint),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _chip(String label, bool selected, VoidCallback onTap) {
-    return Material(
-      color: selected ? _blue : const Color(0xFFF8FAFF),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: _saving ? null : onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: selected ? _blue : AppColors.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (selected) ...[
-                const Icon(Icons.check_rounded, size: 16, color: Colors.white),
-                const SizedBox(width: 4),
-              ],
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? Colors.white : AppColors.ink.withValues(alpha: 0.75),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

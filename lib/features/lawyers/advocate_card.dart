@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
+import '../../core/widgets/states.dart';
 import '../../models/advocate.dart';
+import '../../models/consultation.dart';
+import '../../state/auth_controller.dart';
+import 'booking_sheet.dart';
 
 /// One lawyer, as the directory shows them.
 ///
@@ -42,9 +47,8 @@ class AdvocateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The card leads with chat, the cheapest way in and the channel most
-    // clients start on, then call. Video lives on the profile, where there is
-    // room for all nine figures.
+    // Chat, call and video, each with its per-minute rate, each a button that
+    // books that channel directly.
     //
     // These are the lawyer's own per-minute rates, the same figures the
     // website quotes beside each channel. The card used to read them out of
@@ -54,6 +58,7 @@ class AdvocateCard extends StatelessWidget {
     // same ₹200, whether the lawyer charges ₹10 a minute or ₹1,000.
     final chatRate = advocate.chatRate;
     final callRate = advocate.audioRate;
+    final videoRate = advocate.videoRate;
 
     return Material(
       color: AppColors.surface,
@@ -72,7 +77,7 @@ class AdvocateCard extends StatelessWidget {
             children: [
               _portrait(),
               const SizedBox(width: 12),
-              Expanded(child: _details(chatRate, callRate)),
+              Expanded(child: _details(context, chatRate, callRate, videoRate)),
             ],
           ),
         ),
@@ -119,7 +124,9 @@ class AdvocateCard extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: -7,
-              child: Center(child: _presencePill(online!)),
+              child: Center(
+                child: FittedBox(fit: BoxFit.scaleDown, child: _presencePill(online!)),
+              ),
             ),
         ],
       ),
@@ -177,7 +184,7 @@ class AdvocateCard extends StatelessWidget {
     );
   }
 
-  Widget _details(int chatRate, int callRate) {
+  Widget _details(BuildContext context, int chatRate, int callRate, int videoRate) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -264,15 +271,51 @@ class AdvocateCard extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 9),
+        // Each one opens that consultation straight from the card — chat
+        // books a chat, call a call, video a video — rather than sending the
+        // client to the profile first. Tapping anywhere else still opens it.
         Row(
           children: [
-            _pricePill(Icons.chat_bubble_outline_rounded, 'Chat', chatRate),
-            const SizedBox(width: 8),
-            _pricePill(Icons.call_outlined, 'Call', callRate),
+            Expanded(
+              child: _pricePill(
+                Icons.chat_bubble_outline_rounded, 'Chat', chatRate,
+                onTap: () => _book(context, ConsultationType.chat),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _pricePill(
+                Icons.call_outlined, 'Call', callRate,
+                onTap: () => _book(context, ConsultationType.audio),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _pricePill(
+                Icons.videocam_outlined, 'Video', videoRate,
+                onTap: () => _book(context, ConsultationType.video),
+              ),
+            ),
           ],
         ),
       ],
     );
+  }
+
+  /// Opens the booking sheet for one channel. A client books; a lawyer is
+  /// told they cannot; anyone signed out signs in first and comes back to this
+  /// lawyer's profile.
+  void _book(BuildContext context, ConsultationType type) {
+    final auth = context.read<AuthController>();
+    if (auth.isAdvocate) {
+      Toast.show(context, 'Lawyers cannot book consultations.');
+      return;
+    }
+    if (!auth.isUser) {
+      context.push('/login?redirect=/lawyers/${advocate.profilePath}');
+      return;
+    }
+    BookingSheet.open(context, advocate: advocate, type: type);
   }
 
   /// The lawyer's own tagline when they wrote one, otherwise their practice
@@ -346,7 +389,12 @@ class AdvocateCard extends StatelessWidget {
     }
 
     if (bits.isEmpty) return const SizedBox.shrink();
-    return Row(children: bits);
+    // Shrinks rather than overflowing with large system text sizes.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(mainAxisSize: MainAxisSize.min, children: bits),
+    );
   }
 
   static String _compact(int n) {
@@ -367,15 +415,22 @@ class AdvocateCard extends StatelessWidget {
   /// A lawyer who has not set a rate gets the channel's name instead of a
   /// price, the way the website leaves the figure off rather than quoting ₹0 —
   /// which would read as "free" for someone who simply has not priced it yet.
-  Widget _pricePill(IconData icon, String channel, int perMinute) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+  Widget _pricePill(IconData icon, String channel, int perMinute, {required VoidCallback onTap}) {
+    return Material(
+      color: AppColors.primary.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
       ),
-      child: Row(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 13, color: AppColors.primary),
@@ -408,6 +463,9 @@ class AdvocateCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+      ),
+        ),
       ),
     );
   }

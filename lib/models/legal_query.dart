@@ -176,6 +176,7 @@ class MembershipPlan {
     required this.yearTotal,
     this.areas,
     this.matters,
+    this.cities,
   });
 
   final String id;
@@ -189,8 +190,12 @@ class MembershipPlan {
   final int? areas;
   final int? matters;
 
+  /// Other cities besides the lawyer's own base city.
+  final int? cities;
+
   bool allowsAreas(int count) => areas == null || count <= areas!;
   bool allowsMatters(int count) => matters == null || count <= matters!;
+  bool allowsCities(int count) => cities == null || count <= cities!;
   final String placement;
   final List<String> features;
 
@@ -206,6 +211,7 @@ class MembershipPlan {
     return MembershipPlan(
       areas: j['areas'] == null ? null : J.int$(j['areas']),
       matters: j['matters'] == null ? null : J.int$(j['matters']),
+      cities: j['cities'] == null ? null : J.int$(j['cities']),
       id: J.str(j['id']),
       name: J.str(j['name']),
       tagline: J.str(j['tagline']),
