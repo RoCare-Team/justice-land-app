@@ -130,6 +130,64 @@ class DashboardService {
     final data = await _api.upload(Endpoints.verificationDocuments, form: form);
     return VerificationDocument.fromJson(J.map(J.map(data)['document']));
   }
+
+  // ── Bank accounts ────────────────────────────────────────────────────────
+
+  /// The lawyer's saved payout accounts, primary first — last four digits only.
+  Future<List<BankAccount>> bankAccounts() async {
+    final data = await _api.get(Endpoints.payouts);
+    return J.models(J.map(data)['bankAccounts'], BankAccount.fromJson);
+  }
+
+  /// Adds a payout account. The server validates the number, IFSC and PAN
+  /// again and answers with a sentence the screen can show as it is.
+  Future<BankAccount> addBankAccount({
+    required String holderName,
+    required String bankName,
+    required String accountNumber,
+    required String ifsc,
+    String pan = '',
+  }) async {
+    final data = await _api.post(Endpoints.bankAccounts, body: {
+      'holderName': holderName,
+      'bankName': bankName,
+      'accountNumber': accountNumber,
+      'ifsc': ifsc,
+      if (pan.isNotEmpty) 'pan': pan,
+    });
+    return BankAccount.fromJson(J.map(J.map(data)['account']));
+  }
+}
+
+/// A saved payout account as the server shows it: never the full number.
+class BankAccount {
+  const BankAccount({
+    required this.id,
+    required this.holderName,
+    required this.bankName,
+    required this.ifsc,
+    required this.accountLast4,
+    required this.panLast4,
+    required this.isPrimary,
+  });
+
+  final String id;
+  final String holderName;
+  final String bankName;
+  final String ifsc;
+  final String accountLast4;
+  final String panLast4;
+  final bool isPrimary;
+
+  factory BankAccount.fromJson(Map<String, dynamic> j) => BankAccount(
+        id: J.str(j['id']),
+        holderName: J.str(j['holderName']),
+        bankName: J.str(j['bankName']),
+        ifsc: J.str(j['ifsc']),
+        accountLast4: J.str(j['accountLast4']),
+        panLast4: J.str(j['panLast4']),
+        isPrimary: J.flag(j['isPrimary']),
+      );
 }
 
 /// Profile completion: a percentage and what is still missing.

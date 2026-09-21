@@ -270,11 +270,21 @@ class Endpoints {
   /// profile. Returns the text; saving it is a separate, deliberate act.
   static const String aboutGenerate = '/api/dashboard/about/generate';
 
+  /// POST { holderName, accountNumber, ifsc, bankName?, pan? } → { account } —
+  /// adds a bank account for payouts. The number is sealed on the server; only
+  /// the last four digits come back.
+  static const String bankAccounts = '/api/dashboard/bank-accounts';
+
+  /// GET → the lawyer's balance, payouts and `bankAccounts` (last four only).
+  static const String payouts = '/api/dashboard/payouts';
+
   // ── Misc ─────────────────────────────────────────────────────────────────
   /// POST { name, email, phone, subject, message }
   static const String contact = '/api/contact';
 
-  /// GET ?pincode= → { city, state } — used by the location picker.
+  /// GET ?code= → { pincode, city, state } — used by the location picker and
+  /// the lawyer onboarding. The parameter is `code`, not `pincode`: the server
+  /// answers 400 to anything else.
   static const String pincode = '/api/pincode';
 
   /// GET ?lat=&lng= → reverse geocode to a city.

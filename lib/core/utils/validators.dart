@@ -31,6 +31,21 @@ class Validators {
 
   static bool isPincode(String? v) => _pincode.hasMatch((v ?? '').trim());
 
+  // Payout details, from constants/payouts.js — the server checks them again.
+  static final RegExp _ifsc = RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$');
+  static final RegExp _pan = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$');
+  static final RegExp _accountNumber = RegExp(r'^\d{9,18}$');
+
+  /// Four letters, a zero, six letters or digits — HDFC0001234.
+  static bool isIfsc(String? v) => _ifsc.hasMatch((v ?? '').trim().toUpperCase());
+
+  /// Five letters, four digits, a letter — ABCDE1234F.
+  static bool isPan(String? v) => _pan.hasMatch((v ?? '').trim().toUpperCase());
+
+  /// Nine to eighteen digits; spaces typed for readability are ignored.
+  static bool isAccountNumber(String? v) =>
+      _accountNumber.hasMatch((v ?? '').replaceAll(RegExp(r'\s+'), ''));
+
   static String digitsOnly(String? v) => (v ?? '').replaceAll(_digits, '');
 
   // ── Field validators, shaped for TextFormField.validator ─────────────────

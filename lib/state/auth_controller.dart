@@ -156,8 +156,8 @@ class AuthController extends ChangeNotifier {
       final created =
           await _auth.signUpAdvocate(name: name, email: email, city: city);
       // Set before the session is adopted: adopting it rebuilds the router,
-      // and the router reads this to send the new lawyer on to verification
-      // and practice areas rather than straight to an empty dashboard.
+      // and the router reads this to send the new lawyer through the five
+      // onboarding steps rather than straight to an empty dashboard.
       await setLawyerOnboardingPending(true);
       // Signing up signs the lawyer in, so adopt that session.
       await refresh();
@@ -176,9 +176,9 @@ class AuthController extends ChangeNotifier {
   static const _onboardingKey = 'lawyer_onboarding_pending';
   bool _lawyerOnboardingPending = false;
 
-  /// A lawyer who has just created their account and not yet been through
-  /// Professional Verification and Practice Areas. Kept on this install so
-  /// closing the app halfway resumes where they left off.
+  /// A lawyer who has just created their account and not yet been through the
+  /// onboarding steps (verification, specializations, profile, earnings, plan).
+  /// Kept on this install so closing the app halfway resumes the flow.
   bool get lawyerOnboardingPending => _lawyerOnboardingPending && isAdvocate;
 
   Future<void> setLawyerOnboardingPending(bool value) async {

@@ -142,7 +142,7 @@ class ContentService {
 
   /// PIN code → city and state, for the location picker.
   Future<Map<String, String>> lookupPincode(String pincode) async {
-    final data = await _api.get(Endpoints.pincode, query: {'pincode': pincode});
+    final data = await _api.get(Endpoints.pincode, query: {'code': pincode.trim()});
     final map = J.map(data);
     return {
       'city': J.str(map['city']),
