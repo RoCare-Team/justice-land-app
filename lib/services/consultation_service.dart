@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../core/network/api_client.dart';
 import '../core/network/endpoints.dart';
 import '../models/consultation.dart';
@@ -67,9 +69,7 @@ class ConsultationService {
 
   // ── Reading ──────────────────────────────────────────────────────────────
 
-  /// Polls one session. For an audio consultation this is also what tracks the
-  /// phone call: the server asks the telephony provider whether it was
-  /// answered or hung up and moves the session to match.
+  /// Polls one session — status, clock, and the call's ringing state.
   Future<Consultation> read(String id) async {
     final data = await _api.get(Endpoints.consultation(id));
     return Consultation.fromJson(J.map(J.map(data)['session']));
@@ -214,5 +214,25 @@ class ConsultationService {
     final map = J.map(data);
     final servers = map['iceServers'] ?? map['servers'] ?? data;
     return J.mapList(servers);
+  }
+
+  /// Uploads one call attempt's recording. Best-effort by design — a failed
+  /// upload must never surface as a failed call, so callers swallow errors
+  /// from this rather than showing them.
+  Future<void> uploadRecording(
+    String consultationId, {
+    required String callId,
+    required String filePath,
+    String mimeType = 'audio/mp4',
+  }) async {
+    final form = FormData.fromMap({
+      'callId': callId,
+      'file': await MultipartFile.fromFile(
+        filePath,
+        filename: '$callId.m4a',
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    });
+    await _api.upload(Endpoints.consultationRecording(consultationId), form: form);
   }
 }

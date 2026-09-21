@@ -133,6 +133,10 @@ class Endpoints {
   static String consultationTranscript(String id) =>
       '/api/consultations/$id/transcript';
 
+  /// POST (multipart: file, callId) → upload one call attempt's recording.
+  static String consultationRecording(String id) =>
+      '/api/consultations/$id/recording';
+
   /// GET ?advocateId=&type= → { resumable } — free leftover time, if any.
   static const String resumable = '/api/consultations/resumable';
 

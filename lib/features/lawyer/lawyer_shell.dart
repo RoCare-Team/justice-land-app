@@ -75,7 +75,7 @@ class _LawyerShellState extends State<LawyerShell> {
     final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) return;
     final request = _lawyer?.takeAnnouncement();
-    if (request == null || request.isAudio) return;
+    if (request == null) return;
     _sheetOpen = true;
     showModalBottomSheet<RequestAnswer>(
       context: context,
@@ -295,7 +295,11 @@ class _IncomingRequestSheetState extends State<IncomingRequestSheet> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    s.isVideo ? 'wants a video call with you' : 'wants to chat with you',
+                    s.isVideo
+                        ? 'wants a video call with you'
+                        : s.isAudio
+                            ? 'wants to call you'
+                            : 'wants to chat with you',
                     style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
@@ -305,7 +309,7 @@ class _IncomingRequestSheetState extends State<IncomingRequestSheet> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
               child: Row(
                 children: [
-                  _fact(typeIcon(s.type), s.isVideo ? 'Video' : 'Chat', 'Type'),
+                  _fact(typeIcon(s.type), s.isVideo ? 'Video' : s.isAudio ? 'Audio' : 'Chat', 'Type'),
                   _fact(Icons.currency_rupee_rounded, Fmt.rate(s.rate), 'Your rate'),
                   _fact(Icons.timer_outlined, s.maxMinutes > 0 ? '${s.maxMinutes} min' : '—', 'Up to'),
                 ],

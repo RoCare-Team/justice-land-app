@@ -316,10 +316,7 @@ class PendingPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            session.isAudio
-                ? 'Their phone is ringing. You will be connected as soon as they '
-                    'pick up — nothing is charged if they do not.'
-                : 'Your request has been sent. Nothing is charged until they accept.',
+            'Your request has been sent. Nothing is charged until they accept.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13.5, height: 1.5, color: AppColors.inkMuted),
           ),

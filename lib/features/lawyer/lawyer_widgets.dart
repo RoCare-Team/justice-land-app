@@ -201,7 +201,6 @@ class RequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final lawyer = context.watch<LawyerController>();
     final busy = lawyer.isBusy(session.id);
-    final phone = session.isAudio;
     // One live session at a time: a second accept would leave the first
     // client talking to nobody.
     final inSession = lawyer.live.isNotEmpty;
@@ -239,62 +238,41 @@ class RequestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (phone)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.successSoft,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.phone_in_talk_rounded, size: 16, color: AppColors.success),
-                  SizedBox(width: 6),
-                  Text(
-                    'Ringing on your registered phone',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.success),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : () => declineRequest(context, session),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
+                    minimumSize: const Size(0, 42),
                   ),
-                ],
-              ),
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : () => declineRequest(context, session),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.danger,
-                      side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
-                      minimumSize: const Size(0, 42),
-                    ),
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    label: const Text('Decline'),
-                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Decline'),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: busy || inSession ? null : () => acceptAndOpen(context, session),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                      minimumSize: const Size(0, 42),
-                    ),
-                    icon: busy
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Icon(typeIcon(session.type), size: 18),
-                    label: const Text('Accept'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: busy || inSession ? null : () => acceptAndOpen(context, session),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    minimumSize: const Size(0, 42),
                   ),
+                  icon: busy
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Icon(typeIcon(session.type), size: 18),
+                  label: const Text('Accept'),
                 ),
-              ],
-            ),
-          if (!phone && inSession) ...[
+              ),
+            ],
+          ),
+          if (inSession) ...[
             const SizedBox(height: 8),
             Text(
               'Finish your current consultation to accept this one.',

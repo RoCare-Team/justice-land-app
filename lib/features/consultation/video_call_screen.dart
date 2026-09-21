@@ -17,6 +17,7 @@ import '../../models/consultation.dart';
 import '../../services/consultation_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/session_controller.dart';
+import 'call_recorder.dart';
 import 'session_shell.dart';
 
 /// A video consultation.
@@ -54,6 +55,7 @@ class _VideoCallView extends StatefulWidget {
 class _VideoCallViewState extends State<_VideoCallView> {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
+  late final CallRecorder _recording;
 
   RTCPeerConnection? _peer;
   MediaStream? _localStream;
@@ -97,6 +99,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
   @override
   void initState() {
     super.initState();
+    _recording = CallRecorder(context.read<ConsultationService>(), widget.consultationId);
     WidgetsBinding.instance.addPostFrameCallback((_) => _prepare());
   }
 
@@ -188,6 +191,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
       }
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         if (mounted) setState(() => _connected = true);
+        unawaited(_recording.start());
       }
     };
 
@@ -296,7 +300,9 @@ class _VideoCallViewState extends State<_VideoCallView> {
       final stale = state.id.isNotEmpty && _callId.isNotEmpty && state.id != _callId;
       if (stale || state.isOver || (state.isIdle && _callId.isNotEmpty)) {
         _signalPoll?.cancel();
+        final endingCallId = _callId;
         await _teardownPeer();
+        unawaited(_recording.finishAndUpload(endingCallId));
         if (mounted) {
           setState(() {
             _connected = false;
@@ -371,6 +377,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
 
   Future<void> _hangUp({bool failed = false}) async {
     _signalPoll?.cancel();
+    final endingCallId = _callId;
     try {
       await context
           .read<ConsultationService>()
@@ -379,6 +386,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
       // Hanging up locally still has to happen even if the server missed it.
     }
     await _teardownPeer();
+    unawaited(_recording.finishAndUpload(endingCallId));
     if (mounted) {
       setState(() {
         _connected = false;
@@ -400,6 +408,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
   Future<void> _teardown() async {
     await _peer?.close();
     _peer = null;
+    await _recording.discard();
     final stream = _localStream;
     if (stream != null) {
       for (final track in stream.getTracks()) {

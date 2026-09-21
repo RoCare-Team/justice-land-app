@@ -10,10 +10,8 @@ import '../services/consultation_service.dart';
 /// Drives one live consultation.
 ///
 /// The web client polls rather than holding a socket, and this does the same —
-/// on purpose, not as a shortcut. The poll is what settles a phone call: the
-/// server asks the telephony provider on each tick whether the lawyer picked
-/// up or hung up, and moves the session to match. Stop polling and an audio
-/// consultation never starts and never ends.
+/// on purpose, not as a shortcut. The poll is how the screen learns the lawyer
+/// accepted, declined, or that the session ended.
 class SessionController extends ChangeNotifier {
   SessionController(this._service, this.consultationId);
 

@@ -366,11 +366,11 @@ class _BookingSheetState extends State<BookingSheet> {
           const SizedBox(height: 12),
           NoticeBanner(
             tone: ChipTone.neutral,
-            icon: Icons.phone_in_talk_rounded,
+            icon: Icons.mic_rounded,
             message:
-                'We will ring your registered number first, then connect the '
-                'lawyer. Neither of you sees the other\'s number. Nothing is '
-                'charged if they do not pick up.',
+                'This is a voice call over the internet, inside the app — no '
+                'phone numbers are shared. It connects once the lawyer accepts, '
+                'and nothing is charged if they do not. Calls may be recorded.',
           ),
         ],
       ],
