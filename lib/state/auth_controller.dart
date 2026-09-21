@@ -143,18 +143,15 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  /// Creates the account, then picks up the session it returns.
-  Future<Advocate?> signUpAdvocate({
-    required String name,
-    required String email,
-    required String city,
-  }) async {
+  /// Creates the account from the just-verified number, then picks up the
+  /// session it returns. The name, email and city are filled in later, inside
+  /// the onboarding.
+  Future<Advocate?> signUpAdvocate() async {
     _busy = true;
     _error = null;
     notifyListeners();
     try {
-      final created =
-          await _auth.signUpAdvocate(name: name, email: email, city: city);
+      final created = await _auth.signUpAdvocate();
       // Set before the session is adopted: adopting it rebuilds the router,
       // and the router reads this to send the new lawyer through the five
       // onboarding steps rather than straight to an empty dashboard.

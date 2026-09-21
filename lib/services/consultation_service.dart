@@ -180,6 +180,12 @@ class ConsultationService {
   Future<CallState> answerCall(String id, {required bool accept}) =>
       _call(id, {'action': accept ? 'accept' : 'reject'});
 
+  /// The call's audio/video is really flowing. The server starts the paid clock
+  /// from this moment (the first report wins), so the seconds spent ringing and
+  /// connecting are not billed. Safe to send from both sides, and again on a
+  /// reconnect.
+  Future<void> callConnected(String id) => _api.post(Endpoints.consultationCall(id), body: {'action': 'connected'});
+
   /// Either side hangs up. `failed` distinguishes a connection that never came
   /// up from a deliberate hang-up.
   Future<CallState> endCall(String id, {bool failed = false}) =>

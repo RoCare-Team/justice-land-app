@@ -20,16 +20,22 @@ enum OnboardingStage { idle, paying, saving, done }
 
 typedef OnboardingDoc = ({String kind, String title, IconData icon});
 
+/// Whether a choice went through, or is past what the lawyer's plan covers.
+enum PickResult { ok, needsUpgrade }
+
+/// The name a phone-only account carries until the profile step replaces it.
+const String kPlaceholderName = 'New Advocate';
+
 /// The state behind the five onboarding steps.
 ///
 ///   1 Verification    2 Specializations    3 Profile    4 Earnings    5 Plan
 ///
-/// Steps 1, 3 and 4 save to the server when the lawyer continues. Step 2 does
-/// not: the practice areas, matters and cities are held here and saved at the end,
-/// once the plan is settled. The server refuses a save that is over the plan's
-/// limit, so saving them earlier would stop a Starter lawyer on their third
-/// choice — the flow instead lets them pick freely and reconciles the choices
-/// with the plan on the last step, where an upgrade is one tap away.
+/// Each step saves to the server when the lawyer continues. The plan's limits are
+/// applied as choices are made: a practice area, matter or city past what the
+/// current plan covers is refused with [PickResult.needsUpgrade], and the screen
+/// opens the plans right there. Paying lifts the limit and the choice goes
+/// through — the same as it always worked on the profile editor. The server holds
+/// the same limits on save.
 class OnboardingController extends ChangeNotifier {
   OnboardingController({
     required this.dashboard,
@@ -44,7 +50,6 @@ class OnboardingController extends ChangeNotifier {
   }
 
   static const int stepCount = 5;
-  static const int maxAreas = 6;
   static const int maxDocBytes = 5 * 1024 * 1024;
 
   static const List<OnboardingDoc> docKinds = [
@@ -69,6 +74,7 @@ class OnboardingController extends ChangeNotifier {
   // ── Fields ───────────────────────────────────────────────────────────────
   final barCouncil = TextEditingController();
   final fullName = TextEditingController();
+  final email = TextEditingController();
   final title = TextEditingController();
   final experience = TextEditingController();
   final pincode = TextEditingController();
@@ -128,13 +134,16 @@ class OnboardingController extends ChangeNotifier {
   void _init() {
     final a = advocate;
     barCouncil.text = a?.barCouncilNumber ?? '';
-    fullName.text = a?.name ?? '';
+    // A phone-only account is named "New Advocate" until this step replaces it;
+    // that is not something to show back as if the lawyer had typed it.
+    fullName.text = a == null || a.name == kPlaceholderName ? '' : a.name;
+    email.text = a?.contact.email ?? '';
     title.text = a?.tagline ?? '';
     if ((a?.experience ?? 0) > 0) experience.text = '${a!.experience}';
     pincode.text = a?.office.pincode ?? '';
     baseCity = (a?.city ?? '').trim();
     state = (a?.state ?? '').trim();
-    areas.addAll((a?.specializations ?? const <String>[]).take(maxAreas));
+    areas.addAll(a?.specializations ?? const <String>[]);
     matters.addAll(a?.subSpecializations ?? const <String>[]);
     cities.addAll((a?.practiceCities ?? const <String>[]).where((c) => !_isBase(c)));
     existingPhoto = a?.photo ?? '';
@@ -145,7 +154,7 @@ class OnboardingController extends ChangeNotifier {
       pincodeNote = state.isEmpty ? baseCity : '$baseCity, $state';
     }
 
-    _fields = [barCouncil, fullName, title, experience, pincode, holder, bankName, accountNumber, ifsc, pan];
+    _fields = [barCouncil, fullName, email, title, experience, pincode, holder, bankName, accountNumber, ifsc, pan];
     for (final f in _fields) {
       f.addListener(_onText);
     }
@@ -209,10 +218,17 @@ class OnboardingController extends ChangeNotifier {
     selectedPlanId = current.isNotEmpty ? current.first.id : c.plans.first.id;
   }
 
+  /// Re-reads the plans — after an upgrade, or to retry a failed read. A plan
+  /// the lawyer has just bought becomes the selected one, so the last step opens
+  /// on it; a higher plan they had picked themselves is left alone.
   Future<void> reloadPlans() async {
     try {
-      catalog = await membership.catalog();
-      if (selectedPlan == null) _pickDefaultPlan();
+      final fresh = await membership.catalog();
+      final ids = [for (final p in fresh.plans) p.id];
+      final selected = ids.indexOf(selectedPlanId);
+      final current = ids.indexOf(fresh.currentPlanId);
+      catalog = fresh;
+      if (selected < 0 || selected < current) _pickDefaultPlan();
       error = '';
     } on ApiException catch (e) {
       error = e.message;
@@ -322,31 +338,55 @@ class OnboardingController extends ChangeNotifier {
 
   // ── Step 2: specializations ──────────────────────────────────────────────
 
-  bool get canContinueAreas => areas.isNotEmpty && areas.length <= maxAreas;
+  bool get canContinueAreas => areas.isNotEmpty;
 
-  /// False when the six-area limit stopped it.
-  bool toggleArea(LegalService service) {
+  /// The plan the lawyer is on right now — what their choices are held to. Null
+  /// if the plans could not be read, in which case the server is left to refuse.
+  MembershipPlan? get currentPlan => catalog?.currentPlan;
+
+  /// Ticks or unticks a practice area. Unticking always works; ticking past what
+  /// the current plan covers is refused with [PickResult.needsUpgrade], and the
+  /// screen opens the plans (see [areaUpgradeReason]) and tries again once paid.
+  PickResult toggleArea(LegalService service) {
     if (areas.contains(service.name)) {
       areas.remove(service.name);
       matters.removeWhere((m) => service.subServices.any((s) => s.name == m));
       notifyListeners();
-      return true;
+      return PickResult.ok;
     }
-    if (areas.length >= maxAreas) return false;
+    final plan = currentPlan;
+    if (plan != null && !plan.allowsAreas(areas.length + 1)) return PickResult.needsUpgrade;
     areas.add(service.name);
     notifyListeners();
-    return true;
+    return PickResult.ok;
   }
 
-  void toggleMatter(String matter) {
-    if (!matters.remove(matter)) matters.add(matter);
+  PickResult toggleMatter(String matter) {
+    if (matters.remove(matter)) {
+      notifyListeners();
+      return PickResult.ok;
+    }
+    final plan = currentPlan;
+    if (plan != null && !plan.allowsMatters(matters.length + 1)) return PickResult.needsUpgrade;
+    matters.add(matter);
     notifyListeners();
+    return PickResult.ok;
   }
+
+  String areaUpgradeReason(String name) => currentPlan?.areasReason(name) ?? '';
+  String matterUpgradeReason(String name) => currentPlan?.mattersReason(name) ?? '';
+  String cityUpgradeReason(String name) => currentPlan?.citiesReason(name) ?? '';
 
   int mattersIn(LegalService service) =>
       matters.where((m) => service.subServices.any((s) => s.name == m)).length;
 
-  void continueAreas() => _go(2);
+  /// Saves the areas and matters, then moves on. The server holds the same plan
+  /// limits, so a choice that got past the screen and not the plan is refused
+  /// here with the server's own sentence.
+  Future<void> continueAreas() => _guarded(() async {
+        await dashboard.saveProfile({'services': areas, 'subServices': matters});
+        _step = 2;
+      });
 
   // ── Step 3: profile and cities ───────────────────────────────────────────
 
@@ -355,6 +395,7 @@ class OnboardingController extends ChangeNotifier {
   bool get canContinueProfile {
     final years = experienceYears;
     return fullName.text.trim().length >= 2 &&
+        Validators.isEmail(email.text) &&
         title.text.trim().length >= 2 &&
         years != null &&
         years >= 0 &&
@@ -370,36 +411,31 @@ class OnboardingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleCity(String city) {
-    if (_isBase(city)) return;
-    if (!cities.remove(city)) cities.add(city);
+  /// Adds or removes an extra city (the base city is always included). Adding
+  /// past the plan's allowance is refused with [PickResult.needsUpgrade].
+  PickResult toggleCity(String city) {
+    if (_isBase(city)) return PickResult.ok;
+    if (cities.remove(city)) {
+      notifyListeners();
+      return PickResult.ok;
+    }
+    final plan = currentPlan;
+    if (plan != null && !plan.allowsCities(cities.length + 1)) return PickResult.needsUpgrade;
+    cities.add(city);
     notifyListeners();
-  }
-
-  /// One-tap suggestions: the first cities the directory lists, minus the
-  /// lawyer's own and any already chosen.
-  List<String> get popularCities => [
-        for (final c in cityOptions)
-          if (!_isBase(c.name) && !cities.contains(c.name)) c.name,
-      ].take(12).toList();
-
-  List<String> searchCities(String query) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return const [];
-    return [
-      for (final c in cityOptions)
-        if (c.name.toLowerCase().contains(q) && !_isBase(c.name) && !cities.contains(c.name)) c.name,
-    ].take(8).toList();
+    return PickResult.ok;
   }
 
   Future<void> continueProfile() => _guarded(() async {
         await dashboard.saveProfile({
           'fullName': fullName.text.trim(),
+          'email': email.text.trim(),
           'tagline': title.text.trim(),
           'experience': experienceYears,
           'pincode': pincode.text.trim(),
           'city': baseCity,
           if (state.isNotEmpty) 'state': state,
+          'practiceCities': cities,
           if (photoDataUrl != null) 'photo': photoDataUrl,
         });
         _step = 3;
@@ -517,20 +553,15 @@ class OnboardingController extends ChangeNotifier {
     }
   }
 
+  /// Everything was saved as its step was completed, so all that is left is to
+  /// mark onboarding finished. The short "saving" stage is the progress screen's
+  /// pause before the success screen, not a network call.
   Future<void> _finishSetup() async {
     stage = OnboardingStage.saving;
     notifyListeners();
     try {
-      await dashboard.saveProfile({
-        'services': areas,
-        'subServices': matters,
-        'practiceCities': cities,
-      });
       await onCompleted();
       stage = OnboardingStage.done;
-    } on ApiException catch (e) {
-      error = e.message;
-      stage = OnboardingStage.idle;
     } catch (_) {
       error = 'Something went wrong. Please try again.';
       stage = OnboardingStage.idle;

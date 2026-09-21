@@ -104,6 +104,7 @@ class Consultation {
     this.endsAt,
     this.remainingMs,
     this.clockSkewMs = 0,
+    this.callClockStarted = false,
     this.advocatePhoto = '',
     this.advocateProfilePath = '',
     this.charged = false,
@@ -146,6 +147,11 @@ class Consultation {
   final DateTime? startedAt;
   final DateTime? endsAt;
 
+  /// An audio or video session is billed from the moment its call actually
+  /// connects, not from the lawyer's Accept. False while the call is still
+  /// ringing or connecting, and the clock and cost meter stay off until then.
+  final bool callClockStarted;
+
   /// Server-computed milliseconds left, read at the moment of the response.
   final int? remainingMs;
 
@@ -181,6 +187,12 @@ class Consultation {
   bool get isVideo => type == ConsultationType.video;
   bool get isAudio => type == ConsultationType.audio;
 
+  /// An audio or video session that has been accepted but whose call has not
+  /// connected yet. Nothing is being billed, so the clock and cost meter read
+  /// zero and screens say "Connecting…" instead of counting.
+  bool get awaitingCallClock =>
+      (isAudio || isVideo) && status == ConsultationStatus.active && !callClockStarted;
+
   /// Leftover time can be claimed free for 24 hours after the session ended.
   bool get hasClaimableLeftover => resumeLeftoverSeconds > 0;
 
@@ -197,11 +209,12 @@ class Consultation {
   }
 
   /// How long the session has run, counted from the moment the lawyer
-  /// accepted (for a phone call, the moment it was answered) — never from the
-  /// booking. Zero while the request is still waiting, and it stops at the
+  /// accepted (for an audio or video call, the moment the call connected) —
+  /// never from the booking. Zero while the request is still waiting, and it stops at the
   /// session's end rather than running on past it. The website's live chat
   /// and call timers count the same way.
   Duration get elapsed {
+    if (awaitingCallClock) return Duration.zero;
     final start = startedAt;
     if (start == null) return Duration.zero;
     var until = _serverNow;
@@ -254,6 +267,7 @@ class Consultation {
         createdAt: J.date(j['createdAt']),
         startedAt: J.date(j['startedAt']),
         endsAt: endsAt,
+        callClockStarted: J.flag(j['callClockStarted']),
         remainingMs: remainingMs,
         advocatePhoto: J.str(j['advocatePhoto']),
         advocateProfilePath: J.str(j['advocateProfilePath']),

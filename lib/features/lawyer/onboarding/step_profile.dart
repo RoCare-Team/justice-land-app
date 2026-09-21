@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/states.dart';
+import '../city_picker.dart';
 import 'onboarding_controller.dart';
 import 'onboarding_shell.dart';
+import 'pick_or_upgrade.dart';
 
 const _titleSuggestions = [
   'Advocate',
@@ -27,12 +29,21 @@ class StepProfile extends StatefulWidget {
 }
 
 class _StepProfileState extends State<StepProfile> {
-  final _citySearch = TextEditingController();
+  /// Adding a city past the plan's allowance opens the plans right here; paying
+  /// lifts the limit and the city is added.
+  void _addCity(OnboardingController c, String city) => pickOrUpgrade(
+        context,
+        c,
+        pick: () => c.toggleCity(city),
+        reason: () => c.cityUpgradeReason(city),
+      );
 
-  @override
-  void dispose() {
-    _citySearch.dispose();
-    super.dispose();
+  /// What the plan covers, so the city limit is never a surprise.
+  String _cityNote(OnboardingController c) {
+    final n = c.currentPlan?.cities;
+    if (c.currentPlan == null) return 'Clients searching these cities can find you.';
+    final covers = n == null ? 'any number of other cities' : '$n other ${n == 1 ? 'city' : 'cities'}';
+    return 'Your ${c.currentPlan!.name} plan covers $covers. Add more and you can upgrade right here.';
   }
 
   Future<void> _pickPhoto(OnboardingController c) async {
@@ -57,7 +68,6 @@ class _StepProfileState extends State<StepProfile> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<OnboardingController>();
-    final matches = c.searchCities(_citySearch.text);
 
     return OnboardingShell(
       step: 2,
@@ -82,6 +92,12 @@ class _StepProfileState extends State<StepProfile> {
                 controller: c.fullName,
                 hint: 'e.g., Adv. Priya Sharma',
                 textCapitalization: TextCapitalization.words,
+              ),
+              OnbField(
+                label: 'Email *',
+                controller: c.email,
+                hint: 'you@example.com',
+                keyboardType: TextInputType.emailAddress,
               ),
               OnbField(
                 label: 'Professional Title *',
@@ -146,72 +162,15 @@ class _StepProfileState extends State<StepProfile> {
           ),
           OnbCard(
             title: 'Practice in',
-            subtitle: 'Clients searching these cities can find you.',
+            subtitle: _cityNote(c),
             children: [
-              if (c.baseCity.isNotEmpty) _BaseCityPill(city: c.baseCity),
-              if (c.cities.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final city in c.cities) _CityPill(label: city, onRemove: () => c.toggleCity(city)),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: _citySearch,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'Search any city to add',
-                  prefixIcon: const Icon(Icons.search_rounded, size: 21),
-                  suffixIcon: _citySearch.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 19),
-                          onPressed: () => setState(_citySearch.clear),
-                        ),
-                ),
+              CityPicker(
+                options: [for (final city in c.cityOptions) city.name],
+                selected: c.cities,
+                baseCity: c.baseCity,
+                onAdd: (city) => _addCity(c, city),
+                onRemove: c.toggleCity,
               ),
-              if (matches.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final city in matches)
-                      SelectableChip(
-                        label: city,
-                        selected: false,
-                        onTap: () {
-                          c.toggleCity(city);
-                          _citySearch.clear();
-                          setState(() {});
-                        },
-                      ),
-                  ],
-                ),
-              ] else if (_citySearch.text.trim().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text('No city matches that.', style: TextStyle(fontSize: 13, color: AppColors.inkFaint)),
-              ],
-              if (c.popularCities.isNotEmpty && _citySearch.text.trim().isEmpty) ...[
-                const SizedBox(height: 18),
-                Text(
-                  'POPULAR CITIES',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 0.7, color: AppColors.inkFaint),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final city in c.popularCities)
-                      SelectableChip(label: city, selected: false, onTap: () => c.toggleCity(city)),
-                  ],
-                ),
-              ],
             ],
           ),
           OnbMessages(controller: c),
@@ -280,70 +239,6 @@ class _PhotoPicker extends StatelessWidget {
           style: TextStyle(fontSize: 14, color: AppColors.inkMuted),
         ),
       ],
-    );
-  }
-}
-
-/// The lawyer's own city: always included, never removable, and never counted
-/// against the plan's city allowance.
-class _BaseCityPill extends StatelessWidget {
-  const _BaseCityPill({required this.city});
-
-  final String city;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.accentSoft,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.location_on_rounded, size: 20, color: AppColors.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(city, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          ),
-          Text('Your base city · included', style: TextStyle(fontSize: 12, color: AppColors.inkMuted)),
-        ],
-      ),
-    );
-  }
-}
-
-class _CityPill extends StatelessWidget {
-  const _CityPill({required this.label, required this.onRemove});
-
-  final String label;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.primary.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onRemove,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.45)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
-              const SizedBox(width: 6),
-              const Icon(Icons.close_rounded, size: 16, color: AppColors.primary),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

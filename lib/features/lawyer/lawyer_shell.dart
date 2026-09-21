@@ -30,9 +30,9 @@ class LawyerShell extends StatefulWidget {
 class _LawyerShellState extends State<LawyerShell> {
   static const List<_Tab> _tabs = [
     (path: '/lawyer', icon: Icons.home_outlined, active: Icons.home_rounded, label: 'Home', badge: false),
-    (path: '/lawyer/requests', icon: Icons.notifications_none_rounded, active: Icons.notifications_rounded, label: 'Requests', badge: true),
+    (path: '/lawyer/queries', icon: Icons.inbox_outlined, active: Icons.inbox_rounded, label: 'Queries', badge: false),
     (path: '/lawyer/consultations', icon: Icons.event_note_outlined, active: Icons.event_note_rounded, label: 'Consultations', badge: false),
-    (path: '/lawyer/messages', icon: Icons.chat_bubble_outline_rounded, active: Icons.chat_bubble_rounded, label: 'Messages', badge: false),
+    (path: '/lawyer/requests', icon: Icons.notifications_none_rounded, active: Icons.notifications_rounded, label: 'Requests', badge: true),
     (path: '/lawyer/profile', icon: Icons.person_outline_rounded, active: Icons.person_rounded, label: 'Profile', badge: false),
   ];
 

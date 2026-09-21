@@ -8,9 +8,11 @@ import '../../../models/account.dart';
 import 'category_style.dart';
 import 'onboarding_controller.dart';
 import 'onboarding_shell.dart';
+import 'pick_or_upgrade.dart';
 
-/// Step 2 — the practice areas, drawn as cards. Pick 1–6; a selected card can
-/// open its matters. Nothing is saved here: the choices wait for the plan step.
+/// Step 2 — the practice areas, drawn as cards. A selected card can open its
+/// matters. How many can be chosen is the plan's: a tap past it opens the plans
+/// right here, and paying lifts the limit.
 class StepSpecializations extends StatefulWidget {
   const StepSpecializations({super.key});
 
@@ -27,11 +29,14 @@ class _StepSpecializationsState extends State<StepSpecializations> {
     super.dispose();
   }
 
-  void _tap(OnboardingController c, LegalService service) {
-    if (!c.toggleArea(service)) {
-      Toast.show(context, 'You can choose up to ${OnboardingController.maxAreas} practice areas.');
-    }
-  }
+  /// A tap past the plan's limit opens the plans here; paying lifts it and the
+  /// area is ticked.
+  void _tap(OnboardingController c, LegalService service) => pickOrUpgrade(
+        context,
+        c,
+        pick: () => c.toggleArea(service),
+        reason: () => c.areaUpgradeReason(service.name),
+      );
 
   void _openMatters(OnboardingController c, LegalService service) {
     showModalBottomSheet<void>(
@@ -60,7 +65,7 @@ class _StepSpecializationsState extends State<StepSpecializations> {
     return OnboardingShell(
       step: 1,
       title: 'Your Specializations',
-      subtitle: 'Select your areas of expertise (Select 1–${OnboardingController.maxAreas})',
+      subtitle: 'Select your areas of expertise',
       onBack: c.canGoBack ? c.back : null,
       headerAction: const OnbLaterButton(),
       body: c.services.isEmpty
@@ -93,7 +98,7 @@ class _StepSpecializationsState extends State<StepSpecializations> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        _Counter(count: c.areas.length),
+                        _Counter(count: c.areas.length, limit: c.currentPlan?.areas),
                       ],
                     ),
                   ),
@@ -135,10 +140,15 @@ class _StepSpecializationsState extends State<StepSpecializations> {
                   ),
                 SliverToBoxAdapter(
                   child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    child: OnbMessages(controller: c),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(24, 10, 24, 24),
                     child: Text(
-                      'You can change these later from your profile. How many are listed publicly '
-                      'depends on your plan — you\'ll choose it in the last step.',
+                      _planNote(c),
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12.5, height: 1.45, color: AppColors.inkFaint),
                     ),
@@ -147,19 +157,33 @@ class _StepSpecializationsState extends State<StepSpecializations> {
               ],
             ),
       primaryLabel: c.areas.isEmpty ? 'Continue' : 'Continue · ${c.areas.length} selected',
+      busy: c.saving,
       onPrimary: c.canContinueAreas ? c.continueAreas : null,
     );
   }
+
+  /// What the current plan covers, so the limit is never a surprise.
+  String _planNote(OnboardingController c) {
+    final plan = c.currentPlan;
+    if (plan == null) return 'You can change these later from your profile.';
+    final n = plan.areas;
+    final covers = n == null ? 'any number of practice areas' : '$n practice ${n == 1 ? 'area' : 'areas'}';
+    return 'Your ${plan.name} plan covers $covers. Choose more and you can upgrade right here. '
+        'You can change these later from your profile.';
+  }
 }
 
+/// "2/2" — how many areas are chosen against what the plan covers ("∞" when it
+/// covers any number).
 class _Counter extends StatelessWidget {
-  const _Counter({required this.count});
+  const _Counter({required this.count, required this.limit});
 
   final int count;
+  final int? limit;
 
   @override
   Widget build(BuildContext context) {
-    final full = count >= OnboardingController.maxAreas;
+    final full = limit != null && count >= limit!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
       decoration: BoxDecoration(
@@ -168,7 +192,7 @@ class _Counter extends StatelessWidget {
         border: Border.all(color: count == 0 ? AppColors.border : AppColors.accent.withValues(alpha: 0.6)),
       ),
       child: Text(
-        '$count/${OnboardingController.maxAreas}',
+        '$count/${limit ?? '∞'}',
         style: TextStyle(
           fontSize: 14.5,
           fontWeight: FontWeight.w800,
@@ -357,7 +381,12 @@ class _MattersSheet extends StatelessWidget {
                 SelectableChip(
                   label: m.name,
                   selected: c.matters.contains(m.name),
-                  onTap: () => c.toggleMatter(m.name),
+                  onTap: () => pickOrUpgrade(
+                    context,
+                    c,
+                    pick: () => c.toggleMatter(m.name),
+                    reason: () => c.matterUpgradeReason(m.name),
+                  ),
                 ),
             ],
           ),

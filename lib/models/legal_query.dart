@@ -196,6 +196,18 @@ class MembershipPlan {
   bool allowsAreas(int count) => areas == null || count <= areas!;
   bool allowsMatters(int count) => matters == null || count <= matters!;
   bool allowsCities(int count) => cities == null || count <= cities!;
+
+  /// What to tell a lawyer whose choice is past this plan, shown above the
+  /// upgrade sheet. Only read when the plan has a limit, so the counts exist.
+  String areasReason(String what) => '“$what” needs a bigger plan. $name covers $areas '
+      'practice ${areas == 1 ? 'area' : 'areas'}, and you have used them all.';
+
+  String mattersReason(String what) => '“$what” needs a bigger plan. $name covers $matters '
+      '${matters == 1 ? 'matter' : 'matters'}, and you have used them all.';
+
+  String citiesReason(String what) => '“$what” needs a bigger plan. $name covers $cities other '
+      '${cities == 1 ? 'city' : 'cities'}, and you have used them all.';
+
   final String placement;
   final List<String> features;
 
@@ -241,6 +253,14 @@ class PlanCatalog {
   final String currentPlanName;
   final DateTime? expiresAt;
   final QueryCredits credits;
+
+  /// The plan the lawyer is on right now; null only if the catalog is empty.
+  MembershipPlan? get currentPlan {
+    for (final p in plans) {
+      if (p.id == currentPlanId) return p;
+    }
+    return plans.isEmpty ? null : plans.first;
+  }
 
   factory PlanCatalog.fromJson(Map<String, dynamic> j) {
     final current = J.map(j['current']);

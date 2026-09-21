@@ -17,6 +17,7 @@ import '../../models/consultation.dart';
 import '../../services/consultation_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/session_controller.dart';
+import 'call_clock.dart';
 import 'call_recorder.dart';
 import 'session_shell.dart';
 
@@ -56,6 +57,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
   late final CallRecorder _recording;
+  late final CallClockReporter _clock;
 
   RTCPeerConnection? _peer;
   MediaStream? _localStream;
@@ -100,11 +102,16 @@ class _VideoCallViewState extends State<_VideoCallView> {
   void initState() {
     super.initState();
     _recording = CallRecorder(context.read<ConsultationService>(), widget.consultationId);
+    _clock = CallClockReporter(
+      () => context.read<ConsultationService>().callConnected(widget.consultationId),
+      () => context.read<SessionController>().reload(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _prepare());
   }
 
   @override
   void dispose() {
+    _clock.cancel();
     _signalPoll?.cancel();
     _teardown();
     _localRenderer.dispose();
@@ -192,6 +199,8 @@ class _VideoCallViewState extends State<_VideoCallView> {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         if (mounted) setState(() => _connected = true);
         unawaited(_recording.start());
+        // Billing starts now, not when the request was accepted.
+        unawaited(_clock.report());
       }
     };
 
@@ -701,9 +710,11 @@ class _VideoCallViewState extends State<_VideoCallView> {
                   ),
                 ),
                 Text(
-                  session.isResume
-                      ? 'Free resume · ${Fmt.clock(session.elapsed)}'
-                      : '${Fmt.clock(session.elapsed)} · ₹${session.runningCost} so far',
+                  session.awaitingCallClock
+                      ? 'Connecting…'
+                      : session.isResume
+                          ? 'Free resume · ${Fmt.clock(session.elapsed)}'
+                          : '${Fmt.clock(session.elapsed)} · ₹${session.runningCost} so far',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],

@@ -78,8 +78,8 @@ class AdvocateOtpResult {
 
   /// True when the number already belongs to a lawyer — they are now signed in
   /// and there is nothing left to ask. False means the number is new: the
-  /// server has set the proof cookie and the app should collect a name, email
-  /// and city, then call [AuthService.signUpAdvocate].
+  /// server has set the proof cookie and the app should create the account with
+  /// [AuthService.signUpAdvocate], which needs nothing more than that proof.
   final bool registered;
 
   /// Their name, so the app can greet them without another round trip.
@@ -185,21 +185,18 @@ class AuthService {
     return AdvocateOtpResult.fromJson(J.map(data));
   }
 
-  /// Creates the lawyer's account from the three things asked after the code.
+  /// Creates the lawyer's account from the verified number alone.
+  ///
+  /// The app's way in: no name, email or city is asked here. The account gets a
+  /// temporary name and email, and the onboarding collects the real ones on the
+  /// Professional Profile step. The account has to exist before that, because the
+  /// verification documents are uploaded and a plan can be bought on the way.
   ///
   /// Deliberately takes no phone number. The server reads it from the proof it
   /// set moments ago, so an app that got the number wrong — or a request that
   /// was tampered with — cannot create an account for somebody else's line.
-  Future<Advocate?> signUpAdvocate({
-    required String name,
-    required String email,
-    required String city,
-  }) async {
-    final res = await _api.post(Endpoints.advocateSignup, body: {
-      'name': name.trim(),
-      'email': email.trim(),
-      'city': city.trim(),
-    });
+  Future<Advocate?> signUpAdvocate() async {
+    final res = await _api.post(Endpoints.advocateSignup, body: {'minimal': true});
     final advocate = J.map(res)['advocate'];
     return advocate == null ? null : Advocate.fromJson(J.map(advocate));
   }

@@ -214,7 +214,7 @@ void main() {
     for (final path in [
       '/lawyer/requests',
       '/lawyer/consultations',
-      '/lawyer/messages',
+      '/lawyer/queries',
       '/lawyer/profile',
       '/lawyer/earnings',
       '/lawyer/availability',

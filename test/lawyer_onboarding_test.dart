@@ -22,9 +22,11 @@ import 'package:flutter_legal_care/features/lawyer/onboarding/plan_fit.dart';
 import 'package:flutter_legal_care/features/lawyer/onboarding/step_plan.dart';
 import 'package:flutter_legal_care/features/lawyer/onboarding/step_specializations.dart';
 import 'package:flutter_legal_care/models/legal_query.dart';
+import 'package:flutter_legal_care/services/auth_service.dart';
 import 'package:flutter_legal_care/services/content_service.dart';
 import 'package:flutter_legal_care/services/dashboard_service.dart';
 import 'package:flutter_legal_care/services/membership_service.dart';
+import 'package:flutter_legal_care/state/auth_controller.dart';
 import 'package:flutter_legal_care/state/membership_checkout.dart';
 
 class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin {
@@ -337,22 +339,95 @@ void main() {
       expect(c.canContinueVerification, isTrue);
     });
 
-    test('step 2 allows one to six areas and drops matters with a deselected area', () async {
+    test('step 2 drops matters with a deselected area', () async {
       final c = await _controller();
       expect(c.canContinueAreas, isFalse);
 
-      for (var i = 0; i < OnboardingController.maxAreas; i++) {
-        expect(c.toggleArea(c.services[i]), isTrue);
-      }
+      expect(c.toggleArea(c.services[0]), PickResult.ok);
+      expect(c.toggleArea(c.services[1]), PickResult.ok);
       expect(c.canContinueAreas, isTrue);
-      expect(c.toggleArea(c.services[6]), isFalse, reason: 'the seventh is refused');
-      expect(c.areas.length, OnboardingController.maxAreas);
 
       c.toggleMatter('Civil Law matter A');
       c.toggleMatter('Criminal Law matter A');
       expect(c.mattersIn(c.services[0]), 1);
       c.toggleArea(c.services[0]);
       expect(c.matters, ['Criminal Law matter A']);
+    });
+
+    test('Starter holds a lawyer to 2 areas, 4 matters and 2 cities, and asks them to upgrade past it', () async {
+      final c = await _controller();
+      expect(c.currentPlan?.id, 'free');
+
+      expect(c.toggleArea(c.services[0]), PickResult.ok);
+      expect(c.toggleArea(c.services[1]), PickResult.ok);
+      expect(c.toggleArea(c.services[2]), PickResult.needsUpgrade);
+      expect(c.areas.length, 2, reason: 'the third is not added until a plan covers it');
+      expect(c.areaUpgradeReason('Family Law'), contains('Starter covers 2 practice areas'));
+
+      for (final m in ['a', 'b', 'c', 'd']) {
+        expect(c.toggleMatter(m), PickResult.ok);
+      }
+      expect(c.toggleMatter('e'), PickResult.needsUpgrade);
+      expect(c.matters.length, 4);
+
+      expect(c.toggleCity('Delhi'), PickResult.ok);
+      expect(c.toggleCity('Mumbai'), PickResult.ok);
+      expect(c.toggleCity('Pune'), PickResult.needsUpgrade);
+      expect(c.cities, ['Delhi', 'Mumbai']);
+      expect(c.cityUpgradeReason('Pune'), contains('Starter covers 2 other cities'));
+
+      // Taking one away is never refused, and frees the slot.
+      expect(c.toggleArea(c.services[0]), PickResult.ok);
+      expect(c.toggleArea(c.services[2]), PickResult.ok);
+    });
+
+    test('Professional covers 5 areas, 10 matters and 5 cities; Premium has no limit', () async {
+      _currentPlan = 'professional';
+      final c = await _controller();
+      for (var i = 0; i < 5; i++) {
+        expect(c.toggleArea(c.services[i]), PickResult.ok);
+      }
+      expect(c.toggleArea(c.services[5]), PickResult.needsUpgrade);
+
+      _currentPlan = 'premium';
+      final p = await _controller();
+      for (final s in p.services) {
+        expect(p.toggleArea(s), PickResult.ok);
+      }
+      for (var i = 0; i < 30; i++) {
+        expect(p.toggleMatter('matter $i'), PickResult.ok);
+      }
+      for (var i = 0; i < 30; i++) {
+        expect(p.toggleCity('City $i'), PickResult.ok);
+      }
+      expect(p.areas.length, _serviceNames.length);
+    });
+
+    test('paying lifts the limit: the plans are re-read and the refused pick then goes through', () async {
+      final c = await _controller();
+      c.toggleArea(c.services[0]);
+      c.toggleArea(c.services[1]);
+      expect(c.toggleArea(c.services[2]), PickResult.needsUpgrade);
+
+      _currentPlan = 'professional'; // the upgrade sheet bought it
+      await c.reloadPlans();
+
+      expect(c.currentPlan?.id, 'professional');
+      expect(c.selectedPlan?.id, 'professional', reason: 'the last step opens on the plan just bought');
+      expect(c.toggleArea(c.services[2]), PickResult.ok);
+      expect(c.areas.length, 3);
+    });
+
+    test('continuing from step 2 saves the areas and matters, and moves on', () async {
+      final c = await _controller();
+      c.toggleArea(c.services[0]);
+      c.toggleMatter('Civil Law matter A');
+      await c.continueAreas();
+
+      expect(c.step, 2);
+      final body = _adapter.puts('/api/dashboard/profile').single.data as Map;
+      expect(body['services'], ['Civil Law']);
+      expect(body['subServices'], ['Civil Law matter A']);
     });
 
     test('a PIN code fills the base city and state, and a city is never both base and extra', () async {
@@ -367,24 +442,29 @@ void main() {
       expect(c.state, 'Haryana');
       expect(c.pincodeOk, isTrue);
       expect(c.cities, isEmpty, reason: 'the base city is already included');
-      expect(c.popularCities, isNot(contains('Gurgaon')));
       expect(_adapter.seen.any((o) => o.path == '/api/pincode' && o.queryParameters['code'] == '122001'), isTrue);
     });
 
-    test('step 3 is ready only once name, title, experience and a placed PIN are in', () async {
+    test('step 3 is ready only once name, email, title, experience and a placed PIN are in', () async {
       final c = await _controller();
       c.fullName.text = 'Asha Verma';
       c.title.text = 'Senior Advocate';
       c.experience.text = '12';
-      expect(c.canContinueProfile, isFalse);
       c.pincode.text = '122001';
       await pumpEventQueue();
+      expect(c.canContinueProfile, isFalse, reason: 'the email is asked for here, not at sign-in');
+      c.email.text = 'not an email';
+      expect(c.canContinueProfile, isFalse);
+      c.email.text = 'asha@example.com';
       expect(c.canContinueProfile, isTrue);
 
+      c.toggleCity('Delhi');
       await c.continueProfile();
       expect(c.step, 3);
       final body = _adapter.puts('/api/dashboard/profile').single.data as Map;
       expect(body['fullName'], 'Asha Verma');
+      expect(body['email'], 'asha@example.com');
+      expect(body['practiceCities'], ['Delhi']);
       expect(body['tagline'], 'Senior Advocate');
       expect(body['experience'], 12);
       expect(body['pincode'], '122001');
@@ -430,36 +510,36 @@ void main() {
       return c;
     }
 
-    test('Starter that covers the choices saves them in one call and finishes', () async {
+    test('confirming Starter, which already covers the choices, finishes without another save', () async {
       final done = <String>[];
       final c = await chosen(done: done);
       await c.confirmPlan();
 
       expect(c.stage, OnboardingStage.done);
       expect(done, ['done']);
-      final body = _adapter.puts('/api/dashboard/profile').single.data as Map;
-      expect(body['services'], ['Civil Law', 'Criminal Law']);
-      expect(body['subServices'], ['Civil Law matter A']);
-      expect(body['practiceCities'], ['Delhi']);
+      expect(_adapter.puts('/api/dashboard/profile'), isEmpty, reason: 'each step saved as it was completed');
     });
 
-    test('Starter that is too small is refused with a way forward, and nothing is saved', () async {
-      final c = await chosen();
-      c.toggleArea(c.services[2]); // three areas > Starter's two
+    test('choosing a smaller plan than the choices need is refused with a way forward', () async {
+      _currentPlan = 'professional';
+      final c = await _controller();
+      for (var i = 0; i < 3; i++) {
+        c.toggleArea(c.services[i]);
+      }
+      c.selectPlan('free'); // three areas > Starter's two
       await c.confirmPlan();
 
       expect(c.stage, OnboardingStage.idle);
       expect(c.error, contains('Starter'));
-      expect(_adapter.puts('/api/dashboard/profile'), isEmpty);
 
       c.editChoices();
       expect(c.step, 1);
     });
 
-    test('a paid plan is bought first, then the choices are saved', () async {
+    test('a paid plan is bought, then onboarding finishes', () async {
       final checkoutResults = [const PlanPurchaseResult(PlanPurchaseOutcome.success, 'ok', planName: 'Professional')];
-      final c = await chosen(purchases: checkoutResults);
-      c.toggleArea(c.services[2]);
+      final done = <String>[];
+      final c = await chosen(purchases: checkoutResults, done: done);
       c.selectPlan('professional');
       _currentPlan = 'professional';
 
@@ -467,7 +547,7 @@ void main() {
 
       expect(c.stage, OnboardingStage.done);
       expect(_checkout.bought, ['professional']);
-      expect(_adapter.puts('/api/dashboard/profile').single.data, isA<Map>());
+      expect(done, ['done']);
     });
 
     test('a cancelled payment leaves them on the step with a calm note and saves nothing', () async {
@@ -512,12 +592,18 @@ void main() {
       return c;
     }
 
-    Widget host(OnboardingController c, Widget child) => MaterialApp(
-          theme: AppTheme.light(),
-          home: ChangeNotifierProvider<OnboardingController>.value(value: c, child: child),
+    Widget host(OnboardingController c, Widget child) => MultiProvider(
+          providers: [
+            Provider<MembershipService>.value(value: c.membership),
+            ChangeNotifierProvider(create: (_) => AuthController(AuthService(_api))),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: ChangeNotifierProvider<OnboardingController>.value(value: c, child: child),
+          ),
         );
 
-    testWidgets('categories: cards toggle, the counter follows, the seventh is refused', (tester) async {
+    testWidgets('categories: the counter shows the plan, and a third area on Starter opens the upgrade sheet', (tester) async {
       await tester.binding.setSurfaceSize(const Size(420, 2600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final c = await loaded(tester);
@@ -525,33 +611,63 @@ void main() {
       await tester.pump();
 
       expect(find.text('Civil Law'), findsOneWidget);
-      expect(find.text('0/6'), findsOneWidget);
+      expect(find.text('0/2'), findsOneWidget);
+      expect(find.textContaining('Starter plan covers 2 practice areas'), findsOneWidget);
 
       await tester.tap(find.text('Civil Law'));
       await tester.pump();
-      expect(find.text('1/6'), findsOneWidget);
+      expect(find.text('1/2'), findsOneWidget);
       expect(find.text('Choose matters'), findsOneWidget);
 
-      for (final n in ['Criminal Law', 'Family Law', 'Property Law', 'Corporate Law', 'Tax Law']) {
+      await tester.tap(find.text('Criminal Law'));
+      await tester.pump();
+      expect(find.text('2/2'), findsOneWidget);
+      expect(find.text('Upgrade to add more'), findsNothing);
+
+      await tester.tap(find.text('Family Law'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Upgrade to add more'), findsOneWidget);
+      expect(find.textContaining('Starter covers 2 practice areas'), findsOneWidget);
+      expect(find.text('Professional'), findsOneWidget);
+      expect(find.text('Premium'), findsOneWidget);
+      expect(c.areas, ['Civil Law', 'Criminal Law'], reason: 'nothing is added until a plan covers it');
+
+      // Closing the sheet without paying leaves the selection as it was.
+      await tester.tap(find.byIcon(Icons.close_rounded).last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Upgrade to add more'), findsNothing);
+      expect(find.text('2/2'), findsOneWidget);
+    });
+
+    testWidgets('categories: Premium shows no limit and takes every area', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(420, 2600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      _currentPlan = 'premium';
+      final c = await loaded(tester);
+      await tester.pumpWidget(host(c, const StepSpecializations()));
+      await tester.pump();
+
+      expect(find.text('0/∞'), findsOneWidget);
+      for (final n in ['Civil Law', 'Criminal Law', 'Family Law']) {
         await tester.tap(find.text(n));
         await tester.pump();
       }
-      expect(find.text('6/6'), findsOneWidget);
-
-      await tester.tap(find.text('Labour & Employment'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('You can choose up to 6 practice areas.'), findsOneWidget);
-      expect(find.text('6/6'), findsOneWidget);
+      expect(find.text('3/∞'), findsOneWidget);
+      expect(find.text('Upgrade to add more'), findsNothing);
     });
 
-    testWidgets('plans: shows ours, warns when Starter is too small, then unlocks with a bigger plan', (tester) async {
+    testWidgets('plans: shows ours, warns when the plan is too small, then unlocks with a bigger one', (tester) async {
       await tester.binding.setSurfaceSize(const Size(420, 2600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      _currentPlan = 'professional';
       final c = await loaded(tester);
       for (var i = 0; i < 3; i++) {
         c.toggleArea(c.services[i]);
       }
+      c.selectPlan('free');
       await tester.pumpWidget(host(c, const StepPlan()));
       await tester.pump();
 
@@ -560,12 +676,12 @@ void main() {
       expect(find.text('Premium'), findsOneWidget);
       expect(find.text('Confirm plan selection'), findsNothing);
 
-      // Starter is preselected and covers 2 of the 3 areas: Continue is locked.
+      // Starter is selected and covers 2 of the 3 areas: Continue is locked.
       expect(find.text('Continue with Starter'), findsOneWidget);
       final button = tester.widget<FilledButton>(find.byType(FilledButton));
       expect(button.onPressed, isNull);
 
-      await tester.tap(find.text('Professional'));
+      await tester.tap(find.text('Premium'));
       await tester.pump();
       expect(find.textContaining('Pay '), findsOneWidget);
       expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNotNull);

@@ -9,9 +9,15 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
+import '../../models/account.dart';
 import '../../models/advocate.dart';
+import '../../models/legal_query.dart';
+import '../../services/content_service.dart';
 import '../../services/dashboard_service.dart';
+import '../../services/membership_service.dart';
 import '../../state/auth_controller.dart';
+import '../lawyer/city_picker.dart';
+import '../lawyer/plan_upgrade_sheet.dart';
 
 /// Editing the lawyer's own profile.
 ///
@@ -19,6 +25,10 @@ import '../../state/auth_controller.dart';
 /// what it is given and leaves the rest alone, so a partial payload cannot
 /// blank out sections the screen never displayed — which is exactly what a
 /// full-object PUT built from a half-loaded model would do.
+///
+/// Practice areas, matters and cities are drawn from the same lists the
+/// onboarding uses, so whatever was chosen there shows as chosen here. Ticking
+/// past the plan opens the plans, the way it does in the onboarding.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -54,7 +64,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final List<String> _languages = [];
   final List<String> _courts = [];
   final List<String> _services = [];
+  final List<String> _matters = [];
   final List<String> _practiceCities = [];
+
+  /// What can be ticked: the directory's practice areas (each with its matters)
+  /// and cities. Empty until read; a saved choice is shown either way.
+  List<LegalService> _serviceOptions = [];
+  List<String> _cityOptions = [];
+  PlanCatalog? _plans;
 
   @override
   void initState() {
@@ -82,7 +99,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final advocate = await context.read<DashboardService>().profile();
       if (!mounted) return;
+      final content = context.read<ContentService>();
+      final membership = context.read<MembershipService>();
+      // The lists and the plan are what the chips are drawn from and held to;
+      // a failed read leaves the saved choices showing and the server to decide.
+      var services = <LegalService>[];
+      var cities = <String>[];
+      PlanCatalog? plans;
+      try {
+        services = await content.services();
+      } on ApiException {
+        // Falls back to the saved choices below.
+      }
+      try {
+        cities = [for (final c in await content.cities()) c.name];
+      } on ApiException {
+        // Same.
+      }
+      try {
+        plans = await membership.catalog();
+      } on ApiException {
+        // Same.
+      }
+      if (!mounted) return;
       setState(() {
+        _serviceOptions = services;
+        _cityOptions = cities;
+        _plans = plans;
         _advocate = advocate;
         _photo = advocate.photo;
         _fullName.text = advocate.name;
@@ -111,6 +154,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _services
           ..clear()
           ..addAll(advocate.specializations);
+        _matters
+          ..clear()
+          ..addAll(advocate.subSpecializations);
         _practiceCities
           ..clear()
           ..addAll(advocate.practiceCities);
@@ -150,6 +196,84 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  // ── Practice areas, matters and cities, held to the plan ────────────────
+
+  MembershipPlan? get _plan => _plans?.currentPlan;
+
+  bool _sameCity(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
+
+  /// Other cities chosen — the lawyer's own is never counted against the plan.
+  int get _extraCities => _practiceCities.where((c) => _city.isEmpty || !_sameCity(c, _city)).length;
+
+  /// True when the current plan covers the choice; otherwise opens the plans
+  /// over the form, and once one is bought lifts the limit and checks again.
+  /// The form stays exactly as it is while the lawyer pays.
+  Future<bool> _room(bool Function(MembershipPlan) allows, String Function(MembershipPlan) reason) async {
+    final catalog = _plans;
+    var plan = catalog?.currentPlan;
+    if (catalog == null || plan == null || allows(plan)) return true;
+
+    final upgraded = await PlanUpgradeSheet.open(context, catalog: catalog, reason: reason(plan));
+    if (!upgraded || !mounted) return false;
+
+    try {
+      final fresh = await context.read<MembershipService>().catalog();
+      if (!mounted) return false;
+      setState(() => _plans = fresh);
+      plan = fresh.currentPlan;
+    } on ApiException {
+      // Bought, but the plans could not be re-read: let it through and the
+      // server, which knows the new plan, has the last word on save.
+      return true;
+    }
+    if (plan != null && !allows(plan)) {
+      Toast.error(context, reason(plan));
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _toggleArea(String name) async {
+    if (_services.contains(name)) {
+      setState(() {
+        _services.remove(name);
+        // Its matters go with it, so none is left listed under an area the
+        // lawyer no longer practises.
+        for (final s in _serviceOptions.where((s) => s.name == name)) {
+          _matters.removeWhere((m) => s.subServices.any((x) => x.name == m));
+        }
+      });
+      return;
+    }
+    if (!await _room((p) => p.allowsAreas(_services.length + 1), (p) => p.areasReason(name))) return;
+    if (mounted) setState(() => _services.add(name));
+  }
+
+  Future<void> _toggleMatter(String name) async {
+    if (_matters.contains(name)) {
+      setState(() => _matters.remove(name));
+      return;
+    }
+    if (!await _room((p) => p.allowsMatters(_matters.length + 1), (p) => p.mattersReason(name))) return;
+    if (mounted) setState(() => _matters.add(name));
+  }
+
+  Future<void> _addCity(String name) async {
+    if (_practiceCities.contains(name)) return;
+    if (!await _room((p) => p.allowsCities(_extraCities + 1), (p) => p.citiesReason(name))) return;
+    if (mounted) setState(() => _practiceCities.add(name));
+  }
+
+  /// "2 of 2 on your Starter plan" — what has been chosen against what the plan
+  /// covers, or null while the plan is unknown.
+  String? _usage(int used, int? limit) {
+    final plan = _plan;
+    if (plan == null) return null;
+    return limit == null
+        ? '$used chosen · no limit on your ${plan.name} plan'
+        : '$used of $limit on your ${plan.name} plan';
+  }
+
   Future<void> _save() async {
     // Rates are optional, but one that was typed has to be usable — the same
     // bound the server enforces.
@@ -184,6 +308,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'languages': _languages,
         'courts': _courts,
         'services': _services,
+        'subServices': _matters,
         'practiceCities': _practiceCities,
         'officeName': _officeName.text.trim(),
         'officeAddress': _officeAddress.text.trim(),
@@ -269,12 +394,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 _field(_fullName, 'Full name'),
                 _field(_tagline, 'Tagline', help: 'One line under your name.'),
-                _field(
-                  _about,
-                  'About',
-                  lines: 5,
-                  help: 'At least 40 characters. The first thing a client reads.',
-                ),
                 _field(_experience, 'Years of experience', digitsOnly: true),
                 _field(_barCouncil, 'Bar Council number'),
               ],
@@ -304,8 +423,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   onChanged: (v) => setState(() {
                     _state = v ?? '';
                     _city = '';
-                    _practiceCities
-                        .removeWhere((c) => !RefData.citiesIn(_state).contains(c));
                   }),
                 ),
                 const SizedBox(height: 12),
@@ -354,20 +471,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 12),
           SectionCard(
             title: 'Practice areas',
+            subtitle: _usage(_services.length, _plan?.areas),
             icon: Icons.gavel_rounded,
             child: ChipWrap(
               children: [
-                for (final s in RefData.serviceNames)
+                for (final name in _areaNames)
                   SelectableChip(
-                    label: s,
-                    selected: _services.contains(s),
-                    onTap: () => setState(() => _services.contains(s)
-                        ? _services.remove(s)
-                        : _services.add(s)),
+                    label: name,
+                    selected: _services.contains(name),
+                    onTap: () => _toggleArea(name),
                   ),
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          _mattersCard(),
           const SizedBox(height: 12),
           SectionCard(
             title: 'Courts',
@@ -404,19 +522,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 12),
           SectionCard(
             title: 'Cities you work in',
-            subtitle: 'Besides your base city — clients searching those cities find you.',
+            subtitle: _usage(_extraCities, _plan?.cities) ??
+                'Besides your base city — clients searching those cities find you.',
             icon: Icons.location_city_rounded,
-            child: ChipWrap(
-              children: [
-                for (final c in RefData.citiesIn(_state))
-                  SelectableChip(
-                    label: c,
-                    selected: _practiceCities.contains(c),
-                    onTap: () => setState(() => _practiceCities.contains(c)
-                        ? _practiceCities.remove(c)
-                        : _practiceCities.add(c)),
-                  ),
-              ],
+            child: CityPicker(
+              options: _cityOptions,
+              selected: _practiceCities,
+              baseCity: _city,
+              onAdd: _addCity,
+              onRemove: (city) => setState(() => _practiceCities.remove(city)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Last, after everything that can be ticked: it is the one field a
+          // lawyer writes rather than picks.
+          SectionCard(
+            title: 'About',
+            icon: Icons.notes_rounded,
+            child: _field(
+              _about,
+              'About',
+              lines: 5,
+              help: 'At least 40 characters. The first thing a client reads.',
             ),
           ),
           const SizedBox(height: 22),
@@ -428,6 +555,68 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The directory's practice areas, then any the lawyer has saved that it does
+  /// not list, so nothing they chose can go missing from the screen.
+  List<String> get _areaNames => [
+        for (final s in _serviceOptions) s.name,
+        for (final s in _services)
+          if (!_serviceOptions.any((o) => o.name == s)) s,
+      ];
+
+  /// The matters under each chosen practice area, as chips. A saved matter that
+  /// sits under no listed area is shown last, so it can still be removed.
+  Widget _mattersCard() {
+    final chosen = [
+      for (final s in _serviceOptions)
+        if (_services.contains(s.name) && s.subServices.isNotEmpty) s,
+    ];
+    final known = {for (final s in _serviceOptions) for (final m in s.subServices) m.name};
+    final other = [for (final m in _matters) if (!known.contains(m)) m];
+
+    return SectionCard(
+      title: 'Matters',
+      subtitle: _usage(_matters.length, _plan?.matters),
+      icon: Icons.list_alt_rounded,
+      child: chosen.isEmpty && other.isEmpty
+          ? Text(
+              _services.isEmpty
+                  ? 'Choose a practice area above to pick the matters you handle in it.'
+                  : 'No matters are listed under your practice areas.',
+              style: TextStyle(fontSize: 13.5, color: AppColors.inkMuted),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < chosen.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 18),
+                  Text(chosen[i].name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  ChipWrap(
+                    children: [
+                      for (final m in chosen[i].subServices)
+                        SelectableChip(
+                          label: m.name,
+                          selected: _matters.contains(m.name),
+                          onTap: () => _toggleMatter(m.name),
+                        ),
+                    ],
+                  ),
+                ],
+                if (other.isNotEmpty) ...[
+                  if (chosen.isNotEmpty) const SizedBox(height: 18),
+                  const Text('Other', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  ChipWrap(
+                    children: [
+                      for (final m in other) SelectableChip(label: m, selected: true, onTap: () => _toggleMatter(m)),
+                    ],
+                  ),
+                ],
+              ],
+            ),
     );
   }
 

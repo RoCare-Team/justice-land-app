@@ -17,6 +17,7 @@ import '../../models/consultation.dart';
 import '../../services/consultation_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/session_controller.dart';
+import 'call_clock.dart';
 import 'call_recorder.dart';
 import 'session_shell.dart';
 
@@ -57,6 +58,7 @@ class _AudioCallViewState extends State<_AudioCallView> {
   RTCPeerConnection? _peer;
   MediaStream? _localStream;
   late final CallRecorder _recording;
+  late final CallClockReporter _clock;
   Timer? _signalPoll;
 
   String _callId = '';
@@ -110,11 +112,16 @@ class _AudioCallViewState extends State<_AudioCallView> {
   void initState() {
     super.initState();
     _recording = CallRecorder(context.read<ConsultationService>(), widget.consultationId);
+    _clock = CallClockReporter(
+      () => context.read<ConsultationService>().callConnected(widget.consultationId),
+      () => context.read<SessionController>().reload(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _prepare());
   }
 
   @override
   void dispose() {
+    _clock.cancel();
     _signalPoll?.cancel();
     _teardown();
     super.dispose();
@@ -186,6 +193,8 @@ class _AudioCallViewState extends State<_AudioCallView> {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         if (mounted) setState(() => _connected = true);
         unawaited(_recording.start());
+        // Billing starts now, not when the request was accepted.
+        unawaited(_clock.report());
       }
     };
 
@@ -637,9 +646,11 @@ class _AudioCallViewState extends State<_AudioCallView> {
                   ),
                 ),
                 Text(
-                  session.isResume
-                      ? 'Free resume · ${Fmt.clock(session.elapsed)}'
-                      : '${Fmt.clock(session.elapsed)} · ₹${session.runningCost} so far',
+                  session.awaitingCallClock
+                      ? 'Connecting…'
+                      : session.isResume
+                          ? 'Free resume · ${Fmt.clock(session.elapsed)}'
+                          : '${Fmt.clock(session.elapsed)} · ₹${session.runningCost} so far',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],

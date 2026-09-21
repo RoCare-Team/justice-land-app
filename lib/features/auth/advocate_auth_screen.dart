@@ -14,16 +14,16 @@ import '../../state/auth_controller.dart';
 ///
 /// A number and a code, and nothing else. If the number already belongs to a
 /// lawyer they are signed in and sent to their dashboard; if it does not, the
-/// same screen asks for a name, an email and a city, and that creates the
-/// account. There is no password anywhere in this flow, because the website
-/// removed passwords for lawyers entirely — `/api/auth/login` and
-/// `/api/auth/register` no longer exist, which is why the app's old
-/// email-and-password screens could not sign anybody in.
+/// account is created on the spot from the verified number and the lawyer goes
+/// straight into onboarding, which asks for everything else. There is no
+/// password anywhere in this flow, because the website removed passwords for
+/// lawyers entirely — `/api/auth/login` and `/api/auth/register` no longer
+/// exist, which is why the app's old email-and-password screens could not sign
+/// anybody in.
 ///
-/// The phone number is deliberately not carried into the third step. The
-/// server proved it and remembers it in an httpOnly cookie; the signup call
-/// sends only the three new fields. An app that posted the number itself could
-/// create an account on a line it never verified.
+/// The phone number is deliberately not sent with the signup call. The server
+/// proved it and remembers it in an httpOnly cookie. An app that posted the
+/// number itself could create an account on a line it never verified.
 class AdvocateAuthScreen extends StatefulWidget {
   const AdvocateAuthScreen({super.key, this.intent = AdvocateAuthIntent.register});
 
@@ -38,7 +38,7 @@ class AdvocateAuthScreen extends StatefulWidget {
 
 enum AdvocateAuthIntent { login, register }
 
-enum _Step { phone, otp, details }
+enum _Step { phone, otp }
 
 /// The gateway sends four digits.
 const int _otpLength = 4;
@@ -47,9 +47,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
   _Step _step = _Step.phone;
 
   final _phone = TextEditingController();
-  final _name = TextEditingController();
-  final _email = TextEditingController();
-  final _city = TextEditingController();
   final _codeNodes = List.generate(_otpLength, (_) => FocusNode());
   final _codeFields = List.generate(_otpLength, (_) => TextEditingController());
 
@@ -65,9 +62,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
   void dispose() {
     _resendTimer?.cancel();
     _phone.dispose();
-    _name.dispose();
-    _email.dispose();
-    _city.dispose();
     for (final n in _codeNodes) {
       n.dispose();
     }
@@ -80,11 +74,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
   String get _code => _codeFields.map((c) => c.text).join();
 
   bool get _phoneValid => RegExp(r'^[6-9]\d{9}$').hasMatch(_phone.text.trim());
-
-  bool get _detailsValid =>
-      _name.text.trim().length >= 2 &&
-      RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$').hasMatch(_email.text.trim()) &&
-      _city.text.trim().isNotEmpty;
 
   void _startResendCountdown(int seconds) {
     _resendTimer?.cancel();
@@ -144,11 +133,15 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
       return;
     }
 
+    // A new number: create the account from it and go straight into onboarding.
+    // The router sends a lawyer whose onboarding is pending to its first step.
     setState(() {
-      _step = _Step.details;
       _notice = '';
       _failure = '';
     });
+    final created = await auth.signUpAdvocate();
+    if (!mounted) return;
+    if (created != null) _openDashboard(auth, 'Welcome to Justiceland.');
   }
 
   /// Where a lawyer goes once they are in.
@@ -177,17 +170,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
     context.go('/lawyer');
   }
 
-  Future<void> _createAccount() async {
-    final auth = context.read<AuthController>();
-    final created = await auth.signUpAdvocate(
-      name: _name.text.trim(),
-      email: _email.text.trim(),
-      city: _city.text.trim(),
-    );
-    if (!mounted) return;
-    if (created != null) _openDashboard(auth, 'Welcome to Justiceland.');
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
@@ -206,7 +188,7 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
                 onPressed: busy
                     ? null
                     : () => setState(() {
-                          _step = _step == _Step.details ? _Step.otp : _Step.phone;
+                          _step = _Step.phone;
                           _notice = '';
                           _failure = '';
                         }),
@@ -233,7 +215,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
             const SizedBox(height: 22),
             if (_step == _Step.phone) _phoneField(),
             if (_step == _Step.otp) _otpBlock(busy),
-            if (_step == _Step.details) _detailsFields(),
             if (auth.error != null) ...[
               const SizedBox(height: 14),
               NoticeBanner(tone: ChipTone.danger, message: auth.error!),
@@ -273,7 +254,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
             ? 'Log in'
             : 'Register as a lawyer',
         _Step.otp => 'Enter the code',
-        _Step.details => 'Basic Details',
       };
 
   String? get _subtitle => switch (_step) {
@@ -281,27 +261,21 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
           'Enter your mobile number — we will text you a code. No password to '
               'remember.',
         _Step.otp => null,
-        _Step.details =>
-          'Step 1 of 3. Next you verify your Bar Council details and choose '
-              'your practice areas.',
       };
 
   String get _cta => switch (_step) {
         _Step.phone => 'Send code',
         _Step.otp => 'Verify',
-        _Step.details => 'Continue',
       };
 
   bool get _canSubmit => switch (_step) {
         _Step.phone => _phoneValid,
         _Step.otp => _code.length == _otpLength,
-        _Step.details => _detailsValid,
       };
 
   void _submit() => switch (_step) {
         _Step.phone => _sendCode(),
         _Step.otp => _verify(),
-        _Step.details => _createAccount(),
       };
 
   Widget _phoneField() => Column(
@@ -438,52 +412,6 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
         ),
       );
 
-  Widget _detailsFields() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          NoticeBanner(
-            tone: ChipTone.success,
-            message: '+91 ${_phone.text.trim()} verified — this is the number '
-                'clients will reach you on.',
-          ),
-          const SizedBox(height: 18),
-          const _FieldLabel('Full name'),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _name,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: 'Adv. Your Name'),
-          ),
-          const SizedBox(height: 16),
-          const _FieldLabel('Email address'),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: 'you@example.com'),
-          ),
-          const SizedBox(height: 16),
-          const _FieldLabel('City you practise in'),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _city,
-            textCapitalization: TextCapitalization.words,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: 'Start typing your city'),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'You can add more cities later.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AppColors.ink.withValues(alpha: 0.45)),
-          ),
-        ],
-      );
 }
 
 class _FieldLabel extends StatelessWidget {
@@ -501,22 +429,16 @@ class _FieldLabel extends StatelessWidget {
       );
 }
 
-/// Two dots for the steps everyone does, and a third that only appears once
-/// the number turns out to be new.
-///
-/// It grows rather than promising three up front: until the code is checked
-/// nobody knows whether this is a sign-in or a sign-up, and telling a
-/// returning lawyer they have three steps left when they have none would be a
-/// lie the very next tap exposes.
+/// The two steps everyone does: the number, then the code. Nothing is promised
+/// beyond that — until the code is checked nobody knows whether this is a
+/// sign-in or a sign-up.
 class _PhaseRail extends StatelessWidget {
   const _PhaseRail({required this.step});
   final _Step step;
 
   @override
   Widget build(BuildContext context) {
-    final labels = step == _Step.details
-        ? const ['Number', 'Verify', 'Details']
-        : const ['Number', 'Verify'];
+    const labels = ['Number', 'Verify'];
     final current = _Step.values.indexOf(step);
 
     return Row(

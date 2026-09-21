@@ -5,7 +5,7 @@ import 'lawyer_availability_screen.dart';
 import 'lawyer_cases_screen.dart';
 import 'lawyer_earnings_screen.dart';
 import 'lawyer_home_screen.dart';
-import 'lawyer_messages_screen.dart';
+import 'lawyer_messages_screen.dart' show TranscriptScreen;
 import 'lawyer_notifications_screen.dart';
 import 'lawyer_onboarding_screen.dart';
 import 'lawyer_plan_screen.dart';
@@ -37,16 +37,15 @@ final List<RouteBase> lawyerRoutes = [
   GoRoute(path: '/lawyer/availability', builder: (_, __) => const LawyerAvailabilityScreen()),
   GoRoute(path: '/lawyer/notifications', builder: (_, __) => const LawyerNotificationsScreen()),
   GoRoute(path: '/lawyer/settings', builder: (_, __) => const LawyerSettingsScreen()),
-  GoRoute(path: '/lawyer/queries', builder: (_, __) => const LawyerQueriesScreen()),
   GoRoute(path: '/lawyer/plan', builder: (_, __) => const LawyerPlanScreen()),
   GoRoute(path: '/lawyer/onboarding', builder: (_, __) => const LawyerOnboardingScreen()),
   ShellRoute(
     builder: (context, state, child) => LawyerShell(child: child),
     routes: [
       GoRoute(path: '/lawyer', builder: (_, __) => const LawyerHomeScreen()),
+      GoRoute(path: '/lawyer/queries', builder: (_, __) => const LawyerQueriesScreen()),
       GoRoute(path: '/lawyer/requests', builder: (_, __) => const LawyerRequestsScreen()),
       GoRoute(path: '/lawyer/consultations', builder: (_, __) => const LawyerCasesScreen()),
-      GoRoute(path: '/lawyer/messages', builder: (_, __) => const LawyerMessagesScreen()),
       GoRoute(path: '/lawyer/profile', builder: (_, __) => const LawyerProfileScreen()),
     ],
   ),
