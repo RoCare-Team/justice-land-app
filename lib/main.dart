@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,7 @@ import 'services/content_service.dart';
 import 'services/dashboard_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/membership_service.dart';
+import 'services/push_service.dart';
 import 'services/query_service.dart';
 import 'services/wallet_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -33,6 +35,12 @@ Future<void> main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // Absent google-services.json this fails and is caught inside — the rest of
+  // the app starts exactly as it did before pushes existed. The background
+  // handler is registered either way; it is a no-op until Firebase is.
+  await initFirebase();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // The cookie jar has to exist before the first request — it *is* the
   // session, so a request made before it loads would arrive signed out.
@@ -71,6 +79,7 @@ class JusticelandApp extends StatelessWidget {
         Provider(create: (_) => MarketplaceService(api)),
         Provider(create: (_) => QueryService(api)),
         Provider(create: (_) => MembershipService(api)),
+        Provider(create: (context) => PushService(context.read<DashboardService>())),
 
         // Controllers hold what the server last said.
         ChangeNotifierProvider(
@@ -101,6 +110,7 @@ class JusticelandApp extends StatelessWidget {
             context.read<ConsultationService>(),
             context.read<DashboardService>(),
             context.read<AuthController>(),
+            context.read<PushService>(),
           ),
           update: (_, __, lawyer) => lawyer!,
         ),

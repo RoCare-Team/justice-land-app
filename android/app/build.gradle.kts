@@ -14,11 +14,23 @@ if (keystorePropertiesFile.exists()) {
 }
 val hasUploadKey = keystoreProperties.containsKey("storeFile")
 
+// Firebase (push notifications — see lib/services/push_service.dart) reads its
+// project config from this file, which is not committed (real credentials).
+// Applying the plugin without it present fails the whole build, so it is
+// applied further down only once the file has actually landed here — until
+// then the app builds and runs exactly as it did before pushes were added,
+// just without them.
+val hasFirebaseConfig = file("google-services.json").exists()
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+if (hasFirebaseConfig) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 android {

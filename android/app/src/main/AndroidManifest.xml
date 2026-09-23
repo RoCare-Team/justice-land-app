@@ -16,6 +16,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 
+    <!-- A new request or an incoming call reaching a lawyer whose app is
+         backgrounded or closed (see services/push_service.dart). Android 13+
+         refuses to show any notification without this being explicitly
+         granted; firebase_messaging asks for it, this is what lets it ask. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <!-- The camera and mic are asked for at call time, not required to install:
          a client who only ever chats should still find the app on the Store. -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
@@ -54,6 +60,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Where a request/call push lands when the app has no channel of its
+             own registered yet (the very first notification, before Dart code
+             has run) — see push_service.dart's own channel of the same id,
+             which is what actually decides importance and sound after that. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="consultations" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

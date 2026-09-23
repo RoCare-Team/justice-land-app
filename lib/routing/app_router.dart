@@ -52,8 +52,13 @@ class AppRouter {
       path == '/blogs' ||
       path.startsWith('/blogs/');
 
+  /// The most recently built router. Set by `build()` so code outside the
+  /// widget tree — the push-notification tap handler, which can run before
+  /// any screen exists to hold a BuildContext — still has a way to navigate.
+  static GoRouter? instance;
+
   static GoRouter build(AuthController auth, {bool showIntro = false}) {
-    return GoRouter(
+    final router = GoRouter(
       initialLocation: '/splash',
       // Rebuilds the redirect whenever the session changes, so signing out on
       // one screen cannot leave a protected screen open behind it.
@@ -249,6 +254,8 @@ class AppRouter {
         ),
       ),
     );
+    instance = router;
+    return router;
   }
 }
 

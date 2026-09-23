@@ -42,6 +42,22 @@ dependencies:
   flutter_webrtc: ^1.0.0
   permission_handler: ^11.3.1
 
+  # ── Push notifications ────────────────────────────────────────────────────
+  # A new request or an incoming call reaching a lawyer whose app is
+  # backgrounded or not running at all — the one thing the in-app poll
+  # (LawyerController) cannot do on its own. See services/push_service.dart.
+  # Both need android/app/google-services.json before they do anything; absent
+  # it, Firebase.initializeApp() in main.dart is caught and the app runs
+  # exactly as it did before this was added.
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
+  # Used for exactly one thing: creating the Android notification channel at
+  # high importance before the first push arrives, so a request or a call
+  # actually pops up and makes sound (heads-up) instead of landing quietly in
+  # the tray — a channel firebase_messaging auto-creates on its own comes in
+  # at default importance, which does neither.
+  flutter_local_notifications: ^18.0.1
+
   # ── Location (city detection + "lawyers near me" distance filter) ────────
   geolocator: ^12.0.0
 

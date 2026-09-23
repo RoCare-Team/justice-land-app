@@ -8,6 +8,7 @@ import '../models/account.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
 import '../services/dashboard_service.dart';
+import '../services/push_service.dart';
 import 'auth_controller.dart';
 
 /// One client's sessions with this lawyer, folded together.
@@ -56,7 +57,7 @@ typedef DayEarning = ({DateTime day, int amount, bool isToday});
 /// the lawyer is in the app rather than only while one screen is open — and
 /// why the shell pauses it while the app is in the background.
 class LawyerController extends ChangeNotifier {
-  LawyerController(this._consults, this._dashboard, this._auth) {
+  LawyerController(this._consults, this._dashboard, this._auth, [this._push]) {
     _auth.addListener(_onAuthChanged);
     _onAuthChanged();
   }
@@ -64,6 +65,11 @@ class LawyerController extends ChangeNotifier {
   final ConsultationService _consults;
   final DashboardService _dashboard;
   final AuthController _auth;
+
+  /// Null in tests, and wherever a build has not wired Firebase up yet — see
+  /// PushService's own doc comment for how little that changes: the in-app
+  /// poll below rings exactly the same either way.
+  final PushService? _push;
 
   Timer? _fastPoll;
   Timer? _slowPoll;
@@ -210,6 +216,9 @@ class LawyerController extends ChangeNotifier {
     _available = _auth.advocate?.available ?? false;
     refreshAll();
     _schedule();
+    // Not awaited: registering this device for push is a convenience the
+    // sign-in itself must never wait on.
+    unawaited(_push?.start());
   }
 
   void _schedule() {
@@ -235,6 +244,9 @@ class LawyerController extends ChangeNotifier {
     _announceReady = false;
     _toAnnounce = null;
     notifyListeners();
+    // A phone signed out here must not go on ringing for the account it just
+    // left — see PushService.stop.
+    unawaited(_push?.stop());
   }
 
   /// The app went to the background (or came back). No heartbeat while

@@ -245,6 +245,12 @@ class Endpoints {
   /// replaces it. Stored privately — only the lawyer and admins can open them.
   static const String verificationDocuments = '/api/dashboard/verification-documents';
 
+  /// POST { token } — registers this device's Firebase Cloud Messaging token
+  /// against the signed-in lawyer, so a new request or an incoming call still
+  /// reaches them with the app backgrounded or closed.
+  /// DELETE { token } — removes it, on sign-out.
+  static const String fcmToken = '/api/dashboard/fcm-token';
+
   // ── Membership plans (lawyers) ───────────────────────────────────────────
   //
   // What a plan buys is how much of a practice may be listed and where it

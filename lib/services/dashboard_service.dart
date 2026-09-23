@@ -157,6 +157,19 @@ class DashboardService {
     });
     return BankAccount.fromJson(J.map(J.map(data)['account']));
   }
+
+  // ── Push notifications ───────────────────────────────────────────────────
+
+  /// Registers this device's Firebase token, so a new request or an incoming
+  /// call reaches the signed-in lawyer even with the app backgrounded or
+  /// closed. Called again whenever Firebase rotates the token.
+  Future<void> registerFcmToken(String token) =>
+      _api.post(Endpoints.fcmToken, body: {'token': token});
+
+  /// Removes this device's token — called on sign-out, so a phone that has
+  /// moved on to a different account stops ringing for the one it left.
+  Future<void> unregisterFcmToken(String token) =>
+      _api.delete(Endpoints.fcmToken, body: {'token': token});
 }
 
 /// A saved payout account as the server shows it: never the full number.
