@@ -7,6 +7,7 @@ import '../../services/dashboard_service.dart';
 import '../../services/membership_service.dart';
 import '../../state/auth_controller.dart';
 import 'onboarding/onboarding_controller.dart';
+import 'onboarding/step_consultations.dart';
 import 'onboarding/step_earnings.dart';
 import 'onboarding/step_plan.dart';
 import 'onboarding/step_profile.dart';
@@ -19,8 +20,10 @@ import 'onboarding/step_verification.dart';
 ///   2. Your Specializations      — practice areas (and their matters), 1–6
 ///   3. Professional Profile      — photo, name, title, experience, PIN code,
 ///                                  and the cities they practise in
-///   4. Earnings Setup            — bank account and PAN (can be skipped)
-///   5. Choose Your Plan          — Starter, Professional or Premium
+///   4. Consultations & Fees      — chat, audio, video and in-person, each
+///                                  with its price
+///   5. Earnings Setup            — bank account and PAN (can be skipped)
+///   6. Choose Your Plan          — Starter, Silver or Gold
 ///
 /// Basic details (name, email, city) are already done at signup. The steps live
 /// in `onboarding/`; this screen only provides their shared state and switches
@@ -63,7 +66,8 @@ class _OnboardingHost extends StatelessWidget {
       0 => const StepVerification(),
       1 => const StepSpecializations(),
       2 => const StepProfile(),
-      3 => const StepEarnings(),
+      3 => const StepConsultations(),
+      4 => const StepEarnings(),
       _ => const StepPlan(),
     };
 

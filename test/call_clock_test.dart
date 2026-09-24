@@ -8,7 +8,12 @@ import 'package:flutter_legal_care/core/network/api_exception.dart';
 import 'package:flutter_legal_care/features/consultation/call_clock.dart';
 import 'package:flutter_legal_care/models/consultation.dart';
 
-Consultation _session({required String type, required bool clockStarted, String status = 'active'}) {
+Consultation _session({
+  required String type,
+  required bool clockStarted,
+  String status = 'active',
+  int ranSeconds = 9,
+}) {
   final now = DateTime.now().toUtc();
   return Consultation.fromJson({
     'id': 'c1',
@@ -21,7 +26,7 @@ Consultation _session({required String type, required bool clockStarted, String 
     'rate': 10,
     'maxMinutes': 30,
     'createdAt': now.subtract(const Duration(minutes: 2)).toIso8601String(),
-    'startedAt': now.subtract(const Duration(seconds: 9)).toIso8601String(),
+    'startedAt': now.subtract(Duration(seconds: ranSeconds)).toIso8601String(),
     'endsAt': now.add(const Duration(minutes: 29)).toIso8601String(),
     'remainingMs': const Duration(minutes: 29).inMilliseconds,
     'callClockStarted': clockStarted,
@@ -44,7 +49,16 @@ void main() {
       final s = _session(type: 'audio', clockStarted: true);
       expect(s.awaitingCallClock, isFalse);
       expect(s.elapsed.inSeconds, greaterThanOrEqualTo(8));
-      expect(s.runningCost, 10, reason: 'a started minute is a billed minute');
+      expect(s.runningCost, 0, reason: 'the first 10 seconds are free');
+    });
+
+    test('bills the time actually used, second by second, after the free opening', () {
+      // ₹10/min, 40s in: 30 billable seconds = ₹5 — not a whole started minute.
+      final s = _session(type: 'audio', clockStarted: true, ranSeconds: 40);
+      expect(s.runningCost, closeTo(5, 0.2));
+      // ₹10/min, 70s in: 60 billable seconds = ₹10.
+      final t = _session(type: 'video', clockStarted: true, ranSeconds: 70);
+      expect(t.runningCost, closeTo(10, 0.2));
     });
 
     test('a chat session is on its own clock, unaffected', () {

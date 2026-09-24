@@ -300,8 +300,9 @@ class _AudioCallViewState extends State<_AudioCallView> {
       if (stale || state.isOver || (state.isIdle && _callId.isNotEmpty)) {
         _signalPoll?.cancel();
         final endingCallId = _callId;
+        await _recording.stop();
         await _teardownPeer();
-        unawaited(_recording.finishAndUpload(endingCallId));
+        unawaited(_recording.upload(endingCallId));
         if (mounted) {
           setState(() {
             _connected = false;
@@ -379,8 +380,9 @@ class _AudioCallViewState extends State<_AudioCallView> {
     } on ApiException {
       /* hanging up locally still has to happen even if the server missed it */
     }
+    await _recording.stop();
     await _teardownPeer();
-    unawaited(_recording.finishAndUpload(endingCallId));
+    unawaited(_recording.upload(endingCallId));
     if (mounted) {
       setState(() {
         _connected = false;
@@ -650,7 +652,7 @@ class _AudioCallViewState extends State<_AudioCallView> {
                       ? 'Connecting…'
                       : session.isResume
                           ? 'Free resume · ${Fmt.clock(session.elapsed)}'
-                          : '${Fmt.clock(session.elapsed)} · ₹${session.runningCost} so far',
+                          : '${Fmt.clock(session.elapsed)} · ${Fmt.amount(session.runningCost)} so far',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],

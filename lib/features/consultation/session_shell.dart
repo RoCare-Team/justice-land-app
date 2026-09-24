@@ -105,7 +105,7 @@ class SessionHeader extends StatelessWidget {
                         _meter(
                           Icons.currency_rupee_rounded,
                           session.isResume ? 'Free resume' : 'Cost so far',
-                          session.isResume ? '₹0' : Fmt.money(session.runningCost),
+                          session.isResume ? '₹0' : Fmt.amount(session.runningCost),
                         ),
                         Container(
                           height: 26,
@@ -443,7 +443,7 @@ Future<bool> confirmEndSession(BuildContext context, Consultation session) async
         session.isResume
             ? 'This is a free resume. Ending it now keeps whatever time is still '
                 'left claimable for 24 hours.'
-            : 'You will be billed ${Fmt.money(session.runningCost)} for the '
+            : 'You will be billed ${Fmt.amount(session.runningCost)} for the '
                 '${Fmt.pluralize(session.elapsedMinutes, 'minute')} used so far. '
                 'Any time you have not used stays claimable, free, for 24 hours.',
         style: const TextStyle(height: 1.5),

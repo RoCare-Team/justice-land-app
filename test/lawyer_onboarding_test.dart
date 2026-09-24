@@ -473,7 +473,43 @@ void main() {
       expect(body.containsKey('photo'), isFalse);
     });
 
-    test('step 4 sends the bank details with the PAN, and can be skipped', () async {
+    test('step 4 asks how they consult, and prices only what they offer', () async {
+      final c = await _controller();
+      expect(c.canContinueConsultations, isFalse, reason: 'no channel chosen yet');
+
+      c.setOffersVideo(true);
+      expect(c.canContinueConsultations, isFalse, reason: 'video needs a price');
+      c.videoRate.text = '99999';
+      expect(c.canContinueConsultations, isFalse, reason: 'outside the allowed range');
+      c.videoRate.text = '50';
+      expect(c.canContinueConsultations, isTrue);
+
+      c.setOffersChat(true);
+      c.chatRate.text = '20';
+      c.setOffersInPerson(true);
+      expect(c.canContinueConsultations, isFalse, reason: 'an in-person visit needs a fee');
+      c.inPersonFee.text = '1000';
+      expect(c.canContinueConsultations, isTrue);
+
+      await c.continueConsultations();
+      final body = _adapter.puts('/api/dashboard/profile').single.data as Map;
+      expect(body['chatRate'], '20');
+      expect(body['videoRate'], '50');
+      expect(body['audioRate'], '0', reason: 'not offered');
+      expect(body['fee'], '1000');
+      expect(c.step, 4);
+    });
+
+    test('switching a channel off clears its price', () async {
+      final c = await _controller();
+      c.setOffersVideo(true);
+      c.videoRate.text = '50';
+      c.setOffersVideo(false);
+      expect(c.videoRate.text, isEmpty);
+      expect(c.canContinueConsultations, isFalse);
+    });
+
+    test('step 5 sends the bank details with the PAN, and can be skipped', () async {
       final c = await _controller();
       expect(c.canContinueEarnings, isFalse);
       c.holder.text = 'Asha Verma';
@@ -491,13 +527,13 @@ void main() {
       expect(body['ifsc'], 'HDFC0001234');
       expect(body['pan'], 'ABCDE1234F');
       expect(c.savedAccount?.accountLast4, '3456');
-      expect(c.step, 4);
+      expect(c.step, 5);
     });
 
     test('Skip for now moves on without saving anything', () async {
       final c = await _controller();
       c.skipEarnings();
-      expect(c.step, 4);
+      expect(c.step, 5);
       expect(_adapter.seen.where((o) => o.path == '/api/dashboard/bank-accounts'), isEmpty);
     });
 

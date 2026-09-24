@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 import '../core/network/api_client.dart';
@@ -222,6 +224,12 @@ class ConsultationService {
     return J.mapList(servers);
   }
 
+  /// How much of a recording goes up in one request. The server is behind a
+  /// host that refuses bodies much past 4.5 MB, and a long call's audio is
+  /// bigger than that — so it is sent in parts, using the same `startIndex`
+  /// protocol the web client streams with.
+  static const int _uploadPartBytes = 2 * 1024 * 1024;
+
   /// Uploads one call attempt's recording. Best-effort by design — a failed
   /// upload must never surface as a failed call, so callers swallow errors
   /// from this rather than showing them.
@@ -231,14 +239,28 @@ class ConsultationService {
     required String filePath,
     String mimeType = 'audio/mp4',
   }) async {
-    final form = FormData.fromMap({
-      'callId': callId,
-      'file': await MultipartFile.fromFile(
-        filePath,
-        filename: '$callId.m4a',
-        contentType: DioMediaType.parse(mimeType),
-      ),
-    });
-    await _api.upload(Endpoints.consultationRecording(consultationId), form: form);
+    final bytes = await File(filePath).readAsBytes();
+    if (bytes.isEmpty) return;
+
+    final path = Endpoints.consultationRecording(consultationId);
+    var index = 0;
+    for (var at = 0; at < bytes.length; at += _uploadPartBytes) {
+      final end = at + _uploadPartBytes < bytes.length ? at + _uploadPartBytes : bytes.length;
+      final part = bytes.sublist(at, end);
+      final form = FormData.fromMap({
+        'callId': callId,
+        // The parts of one file, in order: 0 starts it, each later part
+        // follows on. The server joins them back into the same recording.
+        'startIndex': '$index',
+        'chunkCount': '1',
+        'file': MultipartFile.fromBytes(
+          part,
+          filename: '$callId.m4a',
+          contentType: DioMediaType.parse(mimeType),
+        ),
+      });
+      await _api.upload(path, form: form);
+      index += 1;
+    }
   }
 }

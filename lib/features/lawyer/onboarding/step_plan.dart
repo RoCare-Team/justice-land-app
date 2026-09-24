@@ -32,7 +32,7 @@ class StepPlan extends StatelessWidget {
     final alreadyOn = plan != null && catalog != null && plan.id == catalog.currentPlanId;
 
     return OnboardingShell(
-      step: 4,
+      step: 5,
       title: 'Choose Your Plan',
       subtitle: 'Select a plan to start receiving enquiries and clients.',
       onBack: c.canGoBack ? c.back : null,

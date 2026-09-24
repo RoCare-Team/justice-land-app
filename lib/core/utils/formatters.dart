@@ -7,9 +7,18 @@ class Fmt {
 
   static final NumberFormat _inr = NumberFormat.decimalPattern('en_IN');
 
-  /// `₹1,558` — Indian grouping, no paise. Money on this platform is always
-  /// whole rupees: rates, wallet balances and bills are all integers.
+  /// `₹1,558` — Indian grouping, no paise. Rates and wallet balances are whole
+  /// rupees; a running bill is not (see [amount]).
   static String money(num? value) => '₹${_inr.format((value ?? 0).round())}';
+
+  /// `₹26.67` — a live bill, which is charged by the second and so lands on
+  /// paise. Rounding it to rupees on screen would show a figure the wallet
+  /// never moves by. Whole amounts keep their plain form.
+  static String amount(num? value) {
+    final v = (value ?? 0).toDouble();
+    if (v == v.roundToDouble()) return money(v);
+    return '₹${v.toStringAsFixed(2)}';
+  }
 
   /// `₹40/min`, the way a rate is written everywhere on the site.
   static String rate(num? perMinute) => '${money(perMinute)}/min';

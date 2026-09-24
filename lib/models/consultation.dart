@@ -224,16 +224,26 @@ class Consultation {
     return ran.isNegative ? Duration.zero : ran;
   }
 
-  /// Minutes consumed so far, for the live cost meter. Rounded up, because a
-  /// started minute is a billed minute — the same way the server settles it.
+  /// Minutes consumed so far, for labels. Rounded up for display only — the
+  /// bill itself is per second (see [runningCost]).
   int get elapsedMinutes {
     final seconds = elapsed.inSeconds;
     if (seconds <= 0) return 0;
     return (seconds / 60).ceil();
   }
 
-  /// What this session has run up so far. A resume is free, so it stays ₹0.
-  int get runningCost => isResume ? 0 : elapsedMinutes * rate;
+  /// The opening seconds that are never billed — connecting takes a moment.
+  /// Same as FREE_SECONDS on the server.
+  static const int freeSeconds = 10;
+
+  /// What this session has run up so far, second by second after the free
+  /// opening — the same sum the server settles with. A resume stays ₹0.
+  double get runningCost {
+    if (isResume) return 0;
+    final billable = elapsed.inSeconds - freeSeconds;
+    if (billable <= 0) return 0;
+    return (billable * rate / 60 * 100).round() / 100;
+  }
 
   factory Consultation.fromJson(Map<String, dynamic> j) {
     final endsAt = J.date(j['endsAt']);

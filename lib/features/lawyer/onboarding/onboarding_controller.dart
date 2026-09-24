@@ -28,7 +28,7 @@ const String kPlaceholderName = 'New Advocate';
 
 /// The state behind the five onboarding steps.
 ///
-///   1 Verification    2 Specializations    3 Profile    4 Earnings    5 Plan
+///   1 Verification  2 Specializations  3 Profile  4 Consultations  5 Earnings  6 Plan
 ///
 /// Each step saves to the server when the lawyer continues. The plan's limits are
 /// applied as choices are made: a practice area, matter or city past what the
@@ -49,7 +49,7 @@ class OnboardingController extends ChangeNotifier {
     _init();
   }
 
-  static const int stepCount = 5;
+  static const int stepCount = 6;
   static const int maxDocBytes = 5 * 1024 * 1024;
 
   static const List<OnboardingDoc> docKinds = [
@@ -78,6 +78,10 @@ class OnboardingController extends ChangeNotifier {
   final title = TextEditingController();
   final experience = TextEditingController();
   final pincode = TextEditingController();
+  final chatRate = TextEditingController();
+  final audioRate = TextEditingController();
+  final videoRate = TextEditingController();
+  final inPersonFee = TextEditingController();
   final holder = TextEditingController();
   final bankName = TextEditingController();
   final accountNumber = TextEditingController();
@@ -121,6 +125,13 @@ class OnboardingController extends ChangeNotifier {
   Uint8List? photoBytes;
   String? photoDataUrl;
 
+  /// Which ways this lawyer will consult, and at what price. A channel that
+  /// is off is saved as 0, which is how the website reads "not offered".
+  bool offersChat = false;
+  bool offersAudio = false;
+  bool offersVideo = false;
+  bool offersInPerson = false;
+
   BankAccount? savedAccount;
 
   PlanCatalog? catalog;
@@ -147,6 +158,24 @@ class OnboardingController extends ChangeNotifier {
     matters.addAll(a?.subSpecializations ?? const <String>[]);
     cities.addAll((a?.practiceCities ?? const <String>[]).where((c) => !_isBase(c)));
     existingPhoto = a?.photo ?? '';
+    // A rate of 0 means the channel is not offered, so the switch starts off
+    // and the field empty rather than showing "0".
+    if ((a?.chatRate ?? 0) > 0) {
+      offersChat = true;
+      chatRate.text = '${a!.chatRate}';
+    }
+    if ((a?.audioRate ?? 0) > 0) {
+      offersAudio = true;
+      audioRate.text = '${a!.audioRate}';
+    }
+    if ((a?.videoRate ?? 0) > 0) {
+      offersVideo = true;
+      videoRate.text = '${a!.videoRate}';
+    }
+    if ((a?.consultationFee ?? 0) > 0) {
+      offersInPerson = true;
+      inPersonFee.text = '${a!.consultationFee}';
+    }
 
     if (Validators.isPincode(pincode.text) && baseCity.isNotEmpty) {
       _lookedUp = pincode.text.trim();
@@ -154,7 +183,11 @@ class OnboardingController extends ChangeNotifier {
       pincodeNote = state.isEmpty ? baseCity : '$baseCity, $state';
     }
 
-    _fields = [barCouncil, fullName, email, title, experience, pincode, holder, bankName, accountNumber, ifsc, pan];
+    _fields = [
+      barCouncil, fullName, email, title, experience, pincode,
+      chatRate, audioRate, videoRate, inPersonFee,
+      holder, bankName, accountNumber, ifsc, pan,
+    ];
     for (final f in _fields) {
       f.addListener(_onText);
     }
@@ -441,7 +474,47 @@ class OnboardingController extends ChangeNotifier {
         _step = 3;
       });
 
-  // ── Step 4: earnings ─────────────────────────────────────────────────────
+  // ── Step 4: consultations ────────────────────────────────────────────────
+
+  void setOffersChat(bool on) => _setOffer(() => offersChat = on, on ? null : chatRate);
+  void setOffersAudio(bool on) => _setOffer(() => offersAudio = on, on ? null : audioRate);
+  void setOffersVideo(bool on) => _setOffer(() => offersVideo = on, on ? null : videoRate);
+  void setOffersInPerson(bool on) => _setOffer(() => offersInPerson = on, on ? null : inPersonFee);
+
+  void _setOffer(VoidCallback apply, TextEditingController? clear) {
+    apply();
+    clear?.clear();
+    notifyListeners();
+  }
+
+  int _amount(TextEditingController field) => int.tryParse(field.text.trim()) ?? 0;
+
+  /// A per-minute rate has to be within the range the server accepts; the
+  /// in-person fee is a whole visit, so it only has to be more than nothing.
+  bool _rateOk(bool offered, TextEditingController field) {
+    if (!offered) return true;
+    final n = _amount(field);
+    return n >= Validators.minRate && n <= Validators.maxRate;
+  }
+
+  bool get canContinueConsultations =>
+      (offersChat || offersAudio || offersVideo || offersInPerson) &&
+      _rateOk(offersChat, chatRate) &&
+      _rateOk(offersAudio, audioRate) &&
+      _rateOk(offersVideo, videoRate) &&
+      (!offersInPerson || _amount(inPersonFee) > 0);
+
+  Future<void> continueConsultations() => _guarded(() async {
+        await dashboard.saveProfile({
+          'chatRate': offersChat ? '${_amount(chatRate)}' : '0',
+          'audioRate': offersAudio ? '${_amount(audioRate)}' : '0',
+          'videoRate': offersVideo ? '${_amount(videoRate)}' : '0',
+          'fee': offersInPerson ? '${_amount(inPersonFee)}' : '0',
+        });
+        _step = 4;
+      });
+
+  // ── Step 5: earnings ─────────────────────────────────────────────────────
 
   bool get canContinueEarnings =>
       savedAccount != null ||
@@ -459,12 +532,12 @@ class OnboardingController extends ChangeNotifier {
           ifsc: ifsc.text.trim().toUpperCase(),
           pan: pan.text.trim().toUpperCase(),
         );
-        _step = 4;
+        _step = 5;
       });
 
-  void skipEarnings() => _go(4);
+  void skipEarnings() => _go(5);
 
-  // ── Step 5: plan ─────────────────────────────────────────────────────────
+  // ── Step 6: plan ─────────────────────────────────────────────────────────
 
   MembershipPlan? get selectedPlan {
     final c = catalog;

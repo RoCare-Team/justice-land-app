@@ -372,7 +372,7 @@ class _CreditsCard extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: () => context.push('/lawyer/plan'),
                 icon: const Icon(Icons.workspace_premium_rounded, size: 18),
-                label: const Text('Get 25 a month with Premium'),
+                label: const Text('Get 25 a month with Gold'),
               ),
             ),
         ],
@@ -437,8 +437,8 @@ class _LockedPool extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                _point(Icons.toll_rounded, 'Professional: 10 query credits every month'),
-                _point(Icons.workspace_premium_rounded, 'Premium: 25 query credits every month'),
+                _point(Icons.toll_rounded, 'Silver: 10 query credits every month'),
+                _point(Icons.workspace_premium_rounded, 'Gold: 25 query credits every month'),
                 _point(Icons.phone_in_talk_outlined, '1 credit = 1 query — you get the client’s name and number, nobody else does'),
                 const SizedBox(height: 12),
                 SizedBox(

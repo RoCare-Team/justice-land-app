@@ -6,7 +6,7 @@ import '../../../core/utils/validators.dart';
 import 'onboarding_controller.dart';
 import 'onboarding_shell.dart';
 
-/// Step 4 — where consultation earnings are paid. Can be skipped and finished
+/// Step 5 — where consultation earnings are paid. Can be skipped and finished
 /// later from the earnings screen; the account number is sealed on the server.
 class StepEarnings extends StatelessWidget {
   const StepEarnings({super.key});
@@ -20,7 +20,7 @@ class StepEarnings extends StatelessWidget {
         text.trim().isEmpty || valid ? null : message;
 
     return OnboardingShell(
-      step: 3,
+      step: 4,
       title: 'Earnings Setup',
       subtitle: 'Where should we send your consultation payments?',
       onBack: c.canGoBack ? c.back : null,

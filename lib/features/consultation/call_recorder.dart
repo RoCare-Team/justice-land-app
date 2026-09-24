@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -53,32 +54,90 @@ class CallRecorder {
       final recorder = MediaRecorder();
       await recorder.start(path, audioChannel: channel);
       _takes.add(_Take(recorder, path, suffix));
-    } catch (_) {
+    } catch (e) {
       // This channel is unavailable on this device; the other may still work.
+      debugPrint('CallRecorder: $suffix channel did not start: $e');
     }
   }
 
-  /// Stops recording and uploads each file under `<callId>-app-<in|out>`, then
-  /// deletes the local copies.
-  Future<void> finishAndUpload(String callId) async {
+  /// Recorders already stopped, waiting for [upload].
+  final List<_Take> _stopped = [];
+
+  /// Stops both recorders. Must run BEFORE the peer connection is closed:
+  /// the native recorder is fed by the call's audio path, so closing the peer
+  /// first starves it and the file is finalised empty or unplayable.
+  Future<void> stop() async {
     final takes = List<_Take>.of(_takes);
     _takes.clear();
     for (final take in takes) {
       try {
         await take.recorder.stop();
-        final file = File(take.path);
-        if (callId.isNotEmpty && await file.exists() && await file.length() > 0) {
-          await _service.uploadRecording(
-            _consultationId,
-            callId: '$callId-app-${take.suffix}',
-            filePath: take.path,
-          );
-        }
-        if (await file.exists()) await file.delete();
-      } catch (_) {
-        // A lost recording must never surface as a failed call.
+        _stopped.add(take);
+      } catch (e) {
+        debugPrint('CallRecorder: stop failed (${take.suffix}): $e');
       }
     }
+  }
+
+  /// Uploads what [stop] produced under `<callId>-app-<in|out>`, then deletes
+  /// the local copies.
+  Future<void> upload(String callId) async {
+    final takes = List<_Take>.of(_stopped);
+    _stopped.clear();
+    for (final take in takes) {
+      final file = File(take.path);
+      try {
+        if (callId.isNotEmpty && await _settled(file)) {
+          await _upload(take, callId);
+        } else {
+          debugPrint('CallRecorder: nothing to upload for ${take.suffix} (callId "$callId")');
+        }
+      } catch (e) {
+        debugPrint('CallRecorder: upload failed (${take.suffix}): $e');
+      } finally {
+        try {
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Stops and uploads in one go — for callers with no peer teardown between.
+  Future<void> finishAndUpload(String callId) async {
+    await stop();
+    await upload(callId);
+  }
+
+  /// The muxer finalises the file a moment after stop() returns; wait until
+  /// its size stops changing (up to ~4s) rather than reading a half-written one.
+  Future<bool> _settled(File file) async {
+    var last = -1;
+    for (var i = 0; i < 8; i++) {
+      if (!await file.exists()) return false;
+      final size = await file.length();
+      if (size > 0 && size == last) return true;
+      last = size;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    return last > 0;
+  }
+
+  Future<void> _upload(_Take take, String callId) async {
+    Object? error;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await _service.uploadRecording(
+          _consultationId,
+          callId: '$callId-app-${take.suffix}',
+          filePath: take.path,
+        );
+        return;
+      } catch (e) {
+        error = e;
+        await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+      }
+    }
+    debugPrint('CallRecorder: gave up uploading ${take.suffix}: $error');
   }
 
   /// Stops recording without uploading — for a screen closing mid-call.
