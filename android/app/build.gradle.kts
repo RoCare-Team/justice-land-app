@@ -12,6 +12,8 @@ val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
+
 val hasUploadKey = keystoreProperties.containsKey("storeFile")
 
 // Firebase (push notifications — see lib/services/push_service.dart) reads its
