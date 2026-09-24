@@ -46,6 +46,8 @@ class Advocate {
     required this.faqs,
     required this.reviewsList,
     required this.socialLinks,
+    required this.planId,
+    required this.planExpiresAt,
     this.distanceKm,
   });
 
@@ -119,9 +121,29 @@ class Advocate {
   final List<Review> reviewsList;
   final Map<String, String> socialLinks;
 
+  /// The membership the lawyer pays for — 'free', 'professional' (Silver) or
+  /// 'premium' (Gold) — and the day it runs out. Public on purpose: the paid
+  /// plans are sold on a badge clients can see, so the directory needs both to
+  /// draw it, and [paidPlanId] is what decides whether it appears.
+  final String planId;
+  final DateTime? planExpiresAt;
+
   /// Filled in on the client when a location is known and a distance filter is
   /// in play. Never sent by the server.
   final double? distanceKm;
+
+  /// The paid plan this lawyer is actually on today, or '' for none.
+  ///
+  /// A plan whose date has passed reads as Starter — the same rule the website
+  /// applies in `activePlan()` — so the badge disappears the day the plan
+  /// expires rather than advertising a membership that has lapsed. An empty
+  /// expiry is treated as running: admin-granted plans are set without one.
+  String get paidPlanId {
+    if (planId.isEmpty || planId == 'free') return '';
+    final until = planExpiresAt;
+    if (until != null && until.isBefore(DateTime.now())) return '';
+    return planId;
+  }
 
   bool get offersChat => chatRate > 0;
   bool get offersAudio => audioRate > 0;
@@ -195,6 +217,8 @@ class Advocate {
         faqs: faqs,
         reviewsList: reviewsList,
         socialLinks: socialLinks,
+        planId: planId,
+        planExpiresAt: planExpiresAt,
         distanceKm: distanceKm ?? this.distanceKm,
       );
 
@@ -237,6 +261,8 @@ class Advocate {
       officeTiming: J.models(j['officeTiming'], OfficeHours.fromJson),
       faqs: J.models(j['faqs'], Faq.fromJson),
       reviewsList: J.models(j['reviewsList'], Review.fromJson),
+      planId: J.str(j['planId'], 'free'),
+      planExpiresAt: J.date(j['planExpiresAt']),
       socialLinks: J.map(j['socialLinks'])
           .map((k, v) => MapEntry(k, J.str(v)))
         ..removeWhere((_, v) => v.isEmpty),

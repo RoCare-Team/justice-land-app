@@ -7,6 +7,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
 import '../../state/auth_controller.dart';
+import '../../state/saved_lawyers_controller.dart';
 import '../../state/wallet_controller.dart';
 
 /// The client's own account, as a list of places to go.
@@ -109,6 +110,12 @@ class ProfileScreen extends StatelessWidget {
                 icon: Icons.forum_outlined,
                 label: 'My Consultations',
                 onTap: () => context.go('/consultations'),
+              ),
+              _Row(
+                icon: Icons.favorite_border_rounded,
+                label: 'Saved Lawyers',
+                value: _savedCount(context),
+                onTap: () => context.push('/saved'),
               ),
               // Consultations and orders both live here rather than in the
               // bottom bar: each matters enormously on the day you have one
@@ -522,4 +529,14 @@ class _SignedOutProfile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How many lawyers the heart has kept, for the row that opens the shortlist.
+///
+/// Null while it is empty: a row that reads "0 lawyers" says less than one
+/// that says nothing, and the screen still offers the way in either way.
+String? _savedCount(BuildContext context) {
+  final n = context.watch<SavedLawyersController>().count;
+  if (n == 0) return null;
+  return n == 1 ? '1 lawyer' : '$n lawyers';
 }

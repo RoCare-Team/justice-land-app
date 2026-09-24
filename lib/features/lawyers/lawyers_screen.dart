@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/network/api_exception.dart';
@@ -10,6 +11,7 @@ import '../../core/widgets/states.dart';
 import '../../models/advocate.dart';
 import '../../services/advocate_service.dart';
 import '../../state/location_controller.dart';
+import '../../state/saved_lawyers_controller.dart';
 import '../queries/ask_lawyer_sheet.dart';
 import 'advocate_card.dart';
 import 'filter_screen.dart';
@@ -216,6 +218,16 @@ class _LawyersScreenState extends State<LawyersScreen> {
             ),
           ],
         ),
+        // The way back to whatever the heart has kept. Only once something is
+        // saved: an empty shortlist is not worth a permanent button here.
+        actions: [
+          if (context.watch<SavedLawyersController>().count > 0)
+            IconButton(
+              tooltip: 'Saved lawyers',
+              icon: const Icon(Icons.favorite_rounded, color: Color(0xFFEF4444)),
+              onPressed: () => context.push('/saved'),
+            ),
+        ],
       ),
       body: Column(
         children: [

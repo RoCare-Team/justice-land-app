@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/plan_tier_badge.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
@@ -11,6 +12,7 @@ import '../../models/advocate.dart';
 import '../../models/consultation.dart';
 import '../../state/auth_controller.dart';
 import 'booking_sheet.dart';
+import 'save_lawyer_button.dart';
 
 /// One lawyer, as the directory shows them.
 ///
@@ -30,8 +32,6 @@ class AdvocateCard extends StatelessWidget {
     required this.advocate,
     this.online,
     this.onTap,
-    this.saved = false,
-    this.onSave,
   });
 
   final Advocate advocate;
@@ -42,8 +42,6 @@ class AdvocateCard extends StatelessWidget {
   final bool? online;
 
   final VoidCallback? onTap;
-  final bool saved;
-  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -223,29 +221,34 @@ class AdvocateCard extends StatelessWidget {
             SizedBox(
               width: 26,
               height: 22,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                iconSize: 18,
-                onPressed: onSave,
-                icon: Icon(
-                  saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: saved
-                      ? const Color(0xFFEF4444)
-                      : AppColors.ink.withValues(alpha: 0.28),
+              child: SaveLawyerButton(advocate: advocate),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        // The plan badge sits on this line rather than beside the name: the
+        // name already shares its row with the verified pill and the heart,
+        // and on a 320-wide phone a third thing there pushes the lot off the
+        // card. Here it has a whole line to itself and the practice area
+        // ellipsises around it.
+        Row(
+          children: [
+            if (advocate.paidPlanId.isNotEmpty) ...[
+              PlanTierBadge(advocate: advocate, compact: true),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: Text(
+                _speciality,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.ink.withValues(alpha: 0.55),
                 ),
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 1),
-        Text(
-          _speciality,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: AppColors.ink.withValues(alpha: 0.55),
-          ),
         ),
         const SizedBox(height: 5),
         _ratingLine(),

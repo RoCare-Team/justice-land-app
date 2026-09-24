@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/config/consultation_slots.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/plan_tier_badge.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
@@ -16,6 +17,7 @@ import '../../services/advocate_service.dart';
 import '../../state/auth_controller.dart';
 import 'booking_sheet.dart';
 import 'enquiry_sheet.dart';
+import 'save_lawyer_button.dart';
 
 /// A lawyer's public profile, with the live consultation bar pinned at the
 /// bottom — the one thing a visitor came here to do.
@@ -260,11 +262,22 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                             style: Theme.of(context).textTheme.headlineMedium,
                           ),
                         ),
+                        // The heart lives beside the name here rather than in
+                        // the app bar, which scrolls away with the cover.
+                        SaveLawyerButton(advocate: advocate, size: 22),
                       ],
                     ),
-                    if (advocate.verified) ...[
+                    if (advocate.verified || advocate.paidPlanId.isNotEmpty) ...[
                       const SizedBox(height: 6),
-                      const VerifiedBadge(),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          if (advocate.verified) const VerifiedBadge(),
+                          if (advocate.paidPlanId.isNotEmpty)
+                            PlanTierBadge(advocate: advocate),
+                        ],
+                      ),
                     ],
                     if (advocate.tagline.isNotEmpty) ...[
                       const SizedBox(height: 4),

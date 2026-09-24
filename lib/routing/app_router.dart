@@ -18,6 +18,7 @@ import '../features/home/home_screen.dart';
 import '../features/lawyer/lawyer_routes.dart';
 import '../features/lawyers/advocate_profile_screen.dart';
 import '../features/lawyers/lawyers_screen.dart';
+import '../features/lawyers/saved_lawyers_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/onboarding/role_selection_screen.dart';
 import '../features/services/all_services_screen.dart';
@@ -179,6 +180,13 @@ class AppRouter {
           builder: (context, state) => MyOrdersScreen(
             highlightId: state.uri.queryParameters['placed'] ?? '',
           ),
+        ),
+
+        // The heart's shortlist. Open to anyone, signed in or not: it is kept
+        // on the device, so there is no account to gate it behind.
+        GoRoute(
+          path: '/saved',
+          builder: (_, __) => const SavedLawyersScreen(),
         ),
 
         // Lawyer profiles keep the website's path shape, so

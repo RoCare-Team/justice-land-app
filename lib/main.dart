@@ -21,6 +21,7 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'state/auth_controller.dart';
 import 'state/lawyer_controller.dart';
 import 'state/location_controller.dart';
+import 'state/saved_lawyers_controller.dart';
 import 'state/marketplace_controller.dart';
 import 'state/queries_controller.dart';
 import 'state/wallet_controller.dart';
@@ -88,6 +89,11 @@ class JusticelandApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) =>
               LocationController(context.read<ContentService>())..restore(),
+        ),
+        // The shortlist behind the heart on every lawyer card. Device-local,
+        // so it is read once at startup and never waits on the network.
+        ChangeNotifierProvider(
+          create: (_) => SavedLawyersController()..load(),
         ),
         ChangeNotifierProxyProvider<AuthController, WalletController>(
           create: (context) => WalletController(
