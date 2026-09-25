@@ -503,7 +503,7 @@ class _SignedOutProfile extends StatelessWidget {
           const SizedBox(height: 22),
           FilledButton(
             onPressed: () => context.push('/login?redirect=/profile'),
-            child: const Text('Sign in'),
+            child: const Text('Sign in as a user/client'),
           ),
           const SizedBox(height: 10),
           OutlinedButton(
