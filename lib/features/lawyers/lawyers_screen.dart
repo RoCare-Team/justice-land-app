@@ -79,19 +79,27 @@ class _LawyersScreenState extends State<LawyersScreen> {
     _query = AdvocateQuery(
       city: widget.initialCity,
       service: widget.initialService,
-      query: widget.initialQuery,
     );
     _searchController.text = widget.initialQuery;
     _scroll.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _load();
-      _loadAreas();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (widget.initialQuery.trim().isEmpty) {
+        _load();
+        _loadAreas();
+        return;
+      }
+      await _loadAreas();
+      if (mounted) _submitSearch(widget.initialQuery);
     });
   }
 
   Future<void> _loadAreas() async {
-    final areas = await context.read<ContentService>().services();
-    if (mounted) _areas = areas;
+    try {
+      final areas = await context.read<ContentService>().services();
+      if (mounted) _areas = areas;
+    } catch (_) {
+      // Without the matters, search simply stays a name search.
+    }
   }
 
   @override
@@ -185,20 +193,38 @@ class _LawyersScreenState extends State<LawyersScreen> {
     _debounce = Timer(const Duration(milliseconds: 400), () => _applySearch(value));
   }
 
-  /// Runs what is in the box. Text that names a matter or a practice area
-  /// exactly becomes that filter; anything else is a name/keyword search.
+  /// The live search while typing: text that names a matter or a practice
+  /// area exactly becomes that filter; anything else is a name/keyword search.
   void _applySearch(String value) {
     final text = value.trim();
     final hit = _exactTopic(text);
     setState(() {
       _query = hit == null
           ? _query.copyWith(query: text, page: 1)
-          : hit.isMatter
-              ? _query.copyWith(query: '', subService: hit.label, page: 1)
-              : _query.copyWith(query: '', service: hit.label, subService: '', page: 1);
+          : _withTopic(hit);
     });
     _load();
   }
+
+  /// A search the visitor has committed to — Enter here, or the search box on
+  /// Home. The server's `q` never looks at matters, so "divorce" as text finds
+  /// 8 lawyers while 329 list Divorce: text that points at a matter or area
+  /// becomes that filter (and a pill), and only the rest searches by name.
+  void _submitSearch(String value) {
+    final text = value.trim();
+    final hit = _bestTopic(text);
+    if (hit == null) {
+      _applySearch(text);
+      return;
+    }
+    _searchController.clear();
+    setState(() => _query = _withTopic(hit));
+    _load();
+  }
+
+  AdvocateQuery _withTopic(_Suggestion hit) => hit.isMatter
+      ? _query.copyWith(query: '', subService: hit.label, page: 1)
+      : _query.copyWith(query: '', service: hit.label, subService: '', page: 1);
 
   _Suggestion? _exactTopic(String text) {
     final t = text.toLowerCase();
@@ -210,6 +236,38 @@ class _LawyersScreenState extends State<LawyersScreen> {
       }
     }
     return null;
+  }
+
+  /// The matter or area the text most likely means: an exact name, else one
+  /// that starts with it ("bail" → Bail Matters), else one that contains it —
+  /// the shortest such name, being the least specific. Nothing under 3
+  /// letters, which would match half the list.
+  _Suggestion? _bestTopic(String text) {
+    final exact = _exactTopic(text);
+    if (exact != null) return exact;
+    final t = text.toLowerCase();
+    if (t.length < 3) return null;
+
+    _Suggestion? best;
+    var bestRank = 99;
+    void consider(_Suggestion s) {
+      final name = s.label.toLowerCase();
+      if (!name.contains(t)) return;
+      final rank = name.startsWith(t) ? 0 : 1;
+      if (rank < bestRank ||
+          (rank == bestRank && best != null && s.label.length < best!.label.length)) {
+        best = s;
+        bestRank = rank;
+      }
+    }
+
+    for (final a in _areas) {
+      consider(_Suggestion.area(a.name));
+      for (final m in a.subServices) {
+        consider(_Suggestion.matter(m.name, a.name));
+      }
+    }
+    return best;
   }
 
   /// Matters and practice areas straight away, from the list already on the
@@ -356,7 +414,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
                     _debounce?.cancel();
                     _suggestSeq++;
                     setState(() => _suggestions = []);
-                    _applySearch(v);
+                    _submitSearch(v);
                   },
                   decoration: InputDecoration(
                     hintText: 'Search by name, practice area or matter',
