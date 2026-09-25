@@ -30,10 +30,32 @@ class TopUpResult {
 /// Razorpay signed and lets the server decide, because a client that can name
 /// the amount is a client that can mint balance.
 class WalletController extends ChangeNotifier {
-  WalletController(this._service, this._auth);
+  WalletController(this._service, this._auth) {
+    // Nothing else ever asked for the wallet, so it sat at Wallet.empty — ₹0,
+    // no history — until someone pulled to refresh. Read it as soon as there
+    // is a client signed in, and forget it when they sign out.
+    _auth.addListener(_onAuthChanged);
+    _onAuthChanged();
+  }
 
   final WalletService _service;
   final AuthController _auth;
+
+  /// Whose wallet is loaded, so the auth updates [load] itself causes (via
+  /// applyWallet) do not start another read.
+  String? _loadedFor;
+
+  void _onAuthChanged() {
+    final id = _auth.isUser ? _auth.user?.id : null;
+    if (id == _loadedFor) return;
+    _loadedFor = id;
+    if (id == null) {
+      _wallet = Wallet.empty;
+      notifyListeners();
+    } else {
+      load();
+    }
+  }
 
   Wallet _wallet = Wallet.empty;
   bool _loading = false;
@@ -206,6 +228,7 @@ class WalletController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _auth.removeListener(_onAuthChanged);
     _razorpay?.clear();
     super.dispose();
   }

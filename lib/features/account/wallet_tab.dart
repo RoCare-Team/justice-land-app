@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -23,13 +25,49 @@ class WalletTab extends StatefulWidget {
   State<WalletTab> createState() => _WalletTabState();
 }
 
-class _WalletTabState extends State<WalletTab> {
+class _WalletTabState extends State<WalletTab> with WidgetsBindingObserver {
   final _amount = TextEditingController();
   String _error = '';
   String _notice = '';
 
+  /// The balance moves while this is open — a consultation being billed, a
+  /// top-up confirmed by the server — so it is re-read on opening, every
+  /// [_refreshEvery] while on screen, and on coming back to the app.
+  static const _refreshEvery = Duration(seconds: 10);
+  Timer? _refresh;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final wallet = context.read<WalletController>();
+      // The skeleton only when there is nothing to show yet; otherwise the
+      // last balance stays up while the new one is fetched.
+      wallet.load(silent: wallet.transactions.isNotEmpty || wallet.balance > 0);
+    });
+    _refresh = Timer.periodic(_refreshEvery, (_) => _reload());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reload();
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    final wallet = context.read<WalletController>();
+    // Not in the middle of a payment: Razorpay's sheet sends the app to the
+    // background and back, and the credit is the server's to report.
+    if (wallet.paying || wallet.loading) return;
+    wallet.load(silent: true);
+  }
+
   @override
   void dispose() {
+    _refresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _amount.dispose();
     super.dispose();
   }
