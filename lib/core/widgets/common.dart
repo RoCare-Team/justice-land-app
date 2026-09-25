@@ -572,15 +572,21 @@ class Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = tone ?? AppColors.primary;
+    // A light tone — the gold accent — is unreadable as text on its own tint,
+    // so its text is darkened; dark tones like the navy read as they are.
+    final ink = color.computeLuminance() > 0.2
+        ? Color.lerp(color, Colors.black, 0.5)!
+        : color;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ink),
       ),
     );
   }
