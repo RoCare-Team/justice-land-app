@@ -704,22 +704,28 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    icon,
-                    size: 19,
-                    color: highlight ? Colors.white : AppColors.primary,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: highlight ? Colors.white : AppColors.primary,
-                    ),
+                  // Icon and name on one line, the price under them.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 18,
+                        color: highlight ? Colors.white : AppColors.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: highlight ? Colors.white : AppColors.primary,
+                        ),
+                      ),
+                    ],
                   ),
                   if (rate > 0) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text.rich(
                       TextSpan(
                         children: [
