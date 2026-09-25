@@ -23,14 +23,50 @@ class AdvocateQuery {
   });
 
   final String query;
+
+  /// City, practice area, court and language each take one value or several,
+  /// joined with [sep] — "Civil Law|Tax Law" means either. The server knows
+  /// only one value per filter, so [AdvocateService.search] asks once per
+  /// combination and merges; a plain single value goes through untouched.
   final String city;
   final String service;
   final String subService;
   final String court;
 
-  /// A language the lawyer consults in. One, not a set: someone filtering by
-  /// language is looking for the one they are comfortable speaking.
+  /// A language the lawyer consults in — or several, meaning any of them.
   final String language;
+
+  static const String sep = '|';
+
+  /// The values in a multi-value filter, in the order they were picked.
+  static List<String> valuesOf(String field) =>
+      field.split(sep).map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
+
+  static String join(Iterable<String> values) => values.join(sep);
+
+  /// How a filter reads on a pill or in a heading: "Civil Law, Tax Law".
+  static String label(String field) => valuesOf(field).join(', ');
+
+  /// Every single-valued query this one stands for, or just itself when no
+  /// filter holds more than one value.
+  List<AdvocateQuery> expand() {
+    var out = [this];
+    List<AdvocateQuery> by(
+      List<AdvocateQuery> from,
+      String field,
+      AdvocateQuery Function(AdvocateQuery, String) set,
+    ) {
+      final values = valuesOf(field);
+      if (values.length < 2) return from;
+      return [for (final q in from) for (final v in values) set(q, v)];
+    }
+
+    out = by(out, city, (q, v) => q.copyWith(city: v));
+    out = by(out, service, (q, v) => q.copyWith(service: v));
+    out = by(out, court, (q, v) => q.copyWith(court: v));
+    out = by(out, language, (q, v) => q.copyWith(language: v));
+    return out;
+  }
 
   /// Years in practice, as a floor. 0 means no floor.
   final int minExperience;
@@ -135,12 +171,18 @@ class AdvocatePage {
     required this.total,
     required this.page,
     required this.totalPages,
+    this.merged = false,
   });
 
   final List<Advocate> advocates;
   final int total;
   final int page;
   final int totalPages;
+
+  /// Merged from several searches: [total] adds up each one's count, so a
+  /// lawyer who matches two of the picked values is counted twice — it is a
+  /// ceiling, not an exact figure.
+  final bool merged;
 
   bool get hasMore => page < totalPages;
 
@@ -193,7 +235,41 @@ class AdvocateService {
 
   final ApiClient _api;
 
+  /// The most searches one multi-value query fans out into. Two cities by
+  /// three areas by two languages is already twelve requests per page.
+  static const int maxCombinations = 16;
+
   Future<AdvocatePage> search(AdvocateQuery query) async {
+    final combos = query.expand();
+    if (combos.length == 1) return _searchOne(query);
+
+    final pages = await Future.wait(
+      combos.take(maxCombinations).map(_searchOne),
+    );
+
+    // Taken in turns from each search, so the first screen shows a mix of
+    // every value picked rather than all of the first one; a lawyer found by
+    // more than one search appears once.
+    final seen = <String>{};
+    final merged = <Advocate>[];
+    final longest = pages.fold<int>(0, (n, p) => p.advocates.length > n ? p.advocates.length : n);
+    for (var i = 0; i < longest; i++) {
+      for (final p in pages) {
+        if (i >= p.advocates.length) continue;
+        final a = p.advocates[i];
+        if (seen.add(a.id.isEmpty ? a.name : a.id)) merged.add(a);
+      }
+    }
+    return AdvocatePage(
+      advocates: merged,
+      total: pages.fold(0, (n, p) => n + p.total),
+      page: query.page,
+      totalPages: pages.fold(1, (n, p) => p.totalPages > n ? p.totalPages : n),
+      merged: true,
+    );
+  }
+
+  Future<AdvocatePage> _searchOne(AdvocateQuery query) async {
     final data = await _api.get(Endpoints.advocates, query: query.toParams());
     return AdvocatePage.fromJson(J.map(data));
   }

@@ -70,6 +70,8 @@ dependencies:
   # picker cannot choose.
   file_picker: ^10.1.9
   shimmer: ^3.0.0
+  # Voice search on Find Lawyers: the phone's own speech recognizer.
+  speech_to_text: ^7.4.0
 
 dev_dependencies:
   flutter_test:

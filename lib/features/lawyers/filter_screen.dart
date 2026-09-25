@@ -355,7 +355,7 @@ class _PickerTile extends StatelessWidget {
                         )
                       else
                         Text(
-                          chosen ? value : 'All',
+                          chosen ? _summary(value) : 'All',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -387,18 +387,28 @@ class _PickerTile extends StatelessWidget {
     );
   }
 
+  static String _summary(String value) {
+    final values = AdvocateQuery.valuesOf(value);
+    return values.length < 2 ? values.first : '${values.first} +${values.length - 1}';
+  }
+
   Future<void> _open(BuildContext context) async {
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      // Over the tab bar, not under it — its raised Top Lawyers button would
+      // otherwise sit on top of Apply.
+      useRootNavigator: true,
       builder: (_) => _OptionSheet(title: label, value: value, options: options),
     );
     if (picked != null) onPick(picked);
   }
 }
 
-/// The options for one filter, searchable once there are enough of them to be
-/// worth scrolling — the city list runs past a hundred.
+/// The options for one filter, any number of them ticked — searchable once
+/// there are enough to be worth scrolling (the city list runs past a hundred).
+/// Nothing changes until Apply, so ticking through a long list does not
+/// re-run anything; "All" clears the ticks.
 class _OptionSheet extends StatefulWidget {
   const _OptionSheet({
     required this.title,
@@ -407,6 +417,8 @@ class _OptionSheet extends StatefulWidget {
   });
 
   final String title;
+
+  /// The current choice, several values joined as [AdvocateQuery] keeps them.
   final String value;
   final List<String> options;
 
@@ -416,6 +428,7 @@ class _OptionSheet extends StatefulWidget {
 
 class _OptionSheetState extends State<_OptionSheet> {
   String _search = '';
+  late final Set<String> _picked = AdvocateQuery.valuesOf(widget.value).toSet();
 
   @override
   Widget build(BuildContext context) {
@@ -427,7 +440,7 @@ class _OptionSheetState extends State<_OptionSheet> {
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
+      initialChildSize: 0.75,
       maxChildSize: 0.92,
       builder: (context, scroll) => Column(
         children: [
@@ -441,7 +454,7 @@ class _OptionSheetState extends State<_OptionSheet> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 14, 12, 4),
             child: Row(
               children: [
                 Expanded(
@@ -450,11 +463,26 @@ class _OptionSheetState extends State<_OptionSheet> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                if (_picked.isNotEmpty)
+                  TextButton(
+                    onPressed: () => setState(_picked.clear),
+                    child: const Text('Clear'),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Select one or more',
+                style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted),
+              ),
             ),
           ),
           if (searchable)
@@ -472,22 +500,39 @@ class _OptionSheetState extends State<_OptionSheet> {
           Expanded(
             child: ListView.builder(
               controller: scroll,
-              padding: const EdgeInsets.only(bottom: 24),
-              // One extra row at the top: "All", which is how a filter is
-              // removed. Without it the only way out of a choice is Clear all.
+              padding: const EdgeInsets.only(bottom: 12),
+              // "All" first: how a filter is removed without unticking each.
               itemCount: rows.length + 1,
               itemBuilder: (_, i) {
                 if (i == 0) {
-                  return _tile(context, label: 'All', value: '', selected: widget.value.isEmpty);
+                  return _tile(
+                    label: 'All',
+                    selected: _picked.isEmpty,
+                    onTap: () => setState(_picked.clear),
+                  );
                 }
                 final option = rows[i - 1];
                 return _tile(
-                  context,
                   label: option,
-                  value: option,
-                  selected: option == widget.value,
+                  selected: _picked.contains(option),
+                  onTap: () => setState(() {
+                    if (!_picked.remove(option)) _picked.add(option);
+                  }),
                 );
               },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+            child: PrimaryButton(
+              label: _picked.isEmpty ? 'Show all' : 'Apply (${_picked.length})',
+              // Kept in the list's own order, so the pill and the tile read
+              // the same way however the ticks were made.
+              onPressed: () => Navigator.pop(
+                context,
+                AdvocateQuery.join(widget.options.where(_picked.contains)),
+              ),
             ),
           ),
         ],
@@ -495,25 +540,25 @@ class _OptionSheetState extends State<_OptionSheet> {
     );
   }
 
-  Widget _tile(
-    BuildContext context, {
+  Widget _tile({
     required String label,
-    required String value,
     required bool selected,
+    required VoidCallback onTap,
   }) {
-    return ListTile(
+    return CheckboxListTile(
+      value: selected,
+      onChanged: (_) => onTap(),
+      controlAffinity: ListTileControlAffinity.leading,
+      dense: true,
+      activeColor: AppColors.primary,
       title: Text(
         label,
         style: TextStyle(
           fontSize: 14.5,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           color: selected ? AppColors.primary : AppColors.ink,
         ),
       ),
-      trailing: selected
-          ? const Icon(Icons.check_rounded, size: 20, color: AppColors.primary)
-          : null,
-      onTap: () => Navigator.pop(context, value),
     );
   }
 }
