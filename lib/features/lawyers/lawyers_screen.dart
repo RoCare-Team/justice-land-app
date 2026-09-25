@@ -73,6 +73,16 @@ class _LawyersScreenState extends State<LawyersScreen> {
   List<_Suggestion> _suggestions = [];
   Timer? _suggestDebounce;
   int _suggestSeq = 0;
+  bool _suggestLoading = false;
+
+  /// While something is being typed the screen is the search: suggestions
+  /// only, no chips or cards under them. The list comes back once a
+  /// suggestion is picked, the search key pressed, or the box cleared.
+  ///
+  /// Not tied to focus: closing the keyboard is not finishing the search,
+  /// and the list under it would still be the one from before the typing.
+  bool _typing = false;
+  bool get _searching => _typing && _searchController.text.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -194,9 +204,14 @@ class _LawyersScreenState extends State<LawyersScreen> {
   List<Advocate> _withDistance(List<Advocate> list) => list;
 
   void _onSearchChanged(String value) {
+    _typing = value.trim().isNotEmpty;
     _suggest(value);
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () => _applySearch(value));
+    // The list is hidden while typing, so it is only re-run when the box is
+    // emptied — to put back the lawyers a name search had narrowed away.
+    if (value.trim().isEmpty && _query.query.isNotEmpty) {
+      _debounce = Timer(const Duration(milliseconds: 300), () => _applySearch(''));
+    }
   }
 
   /// The live search while typing: text that names a matter or a practice
@@ -300,25 +315,36 @@ class _LawyersScreenState extends State<LawyersScreen> {
       }
     }
     final local = [...matters.take(6), ...areas.take(3)];
-    setState(() => _suggestions = local);
+    setState(() {
+      _suggestions = local;
+      _suggestLoading = true;
+    });
 
     _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
       try {
+        // The server's q also matches profile text — "div" brings back
+        // lawyers whose About mentions divorce — so ask for a wider page and
+        // keep only the ones whose name has what was typed.
         final page = await context
             .read<AdvocateService>()
-            .search(AdvocateQuery(query: text, perPage: 4));
+            .search(AdvocateQuery(query: text, perPage: 20));
         if (!mounted || seq != _suggestSeq) return;
-        setState(() => _suggestions = [
-              ...local,
-              for (final a in page.advocates) _Suggestion.lawyer(a),
-            ]);
+        final byName = page.advocates
+            .where((a) => a.name.toLowerCase().contains(t))
+            .take(5);
+        setState(() {
+          _suggestions = [...local, for (final a in byName) _Suggestion.lawyer(a)];
+          _suggestLoading = false;
+        });
       } on ApiException {
         // Names are a nicety on top of the matters; keep what is shown.
+        if (mounted && seq == _suggestSeq) setState(() => _suggestLoading = false);
       }
     });
   }
 
   void _pickSuggestion(_Suggestion s) {
+    _typing = false;
     FocusScope.of(context).unfocus();
     _debounce?.cancel();
     _suggestDebounce?.cancel();
@@ -364,7 +390,17 @@ class _LawyersScreenState extends State<LawyersScreen> {
   Widget build(BuildContext context) {
     final location = context.watch<LocationController>();
 
-    return Scaffold(
+    // Back while typing leaves the search and puts the list back, rather than
+    // leaving the app with the suggestions still up. A BackButtonListener,
+    // not PopScope: this is a tab's root page, and go_router exits the app
+    // from one without asking its PopScope.
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        if (!_searching) return false;
+        _cancelSearch();
+        return true;
+      },
+      child: Scaffold(
       backgroundColor: AppColors.muted,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
@@ -418,6 +454,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
                   onSubmitted: (v) {
+                    _typing = false;
                     _debounce?.cancel();
                     _suggestSeq++;
                     setState(() => _suggestions = []);
@@ -437,14 +474,9 @@ class _LawyersScreenState extends State<LawyersScreen> {
                           ),
                   ),
                 ),
-                if (_suggestions.isNotEmpty)
-                  _SuggestionPanel(
-                    suggestions: _suggestions,
-                    onPick: _pickSuggestion,
-                  ),
-                const SizedBox(height: 10),
-                _sortChips(),
-                if (_query.hasFilters || location.hasCity) ...[
+                if (!_searching) const SizedBox(height: 10),
+                if (!_searching) _sortChips(),
+                if (!_searching && (_query.hasFilters || location.hasCity)) ...[
                   const SizedBox(height: 10),
                   SizedBox(
                     height: 34,
@@ -516,7 +548,8 @@ class _LawyersScreenState extends State<LawyersScreen> {
           // dropdown holding a value it had no item for and Flutter asserted.
           // Its 'fee' was not a sort the server knows either, so "Lowest rate"
           // had never actually sorted by rate.
-          if (!_loading && _error == null)
+          if (_searching) Expanded(child: _searchResults()),
+          if (!_searching && !_loading && _error == null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
               child: Text(
@@ -528,7 +561,64 @@ class _LawyersScreenState extends State<LawyersScreen> {
                 ),
               ),
             ),
-          Expanded(child: _body()),
+          if (!_searching) Expanded(child: _body()),
+        ],
+      ),
+      ),
+    );
+  }
+
+  void _cancelSearch() {
+    _typing = false;
+    _suggestDebounce?.cancel();
+    _suggestSeq++;
+    _searchFocus.unfocus();
+    _searchController.clear();
+    setState(() => _suggestions = []);
+    if (_query.query.isNotEmpty) _applySearch('');
+  }
+
+  /// The whole screen below the box while typing: what the text could mean.
+  Widget _searchResults() {
+    final text = _searchController.text.trim();
+    if (text.length < 3) {
+      return _searchHint(Icons.keyboard_rounded, 'Keep typing — suggestions appear after 3 letters.');
+    }
+    if (_suggestions.isEmpty) {
+      if (_suggestLoading) {
+        return const Padding(
+          padding: EdgeInsets.only(top: 32),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      }
+      return _searchHint(
+        Icons.search_off_rounded,
+        'No matter, practice area or lawyer matches "$text". '
+        'Press search to look through lawyers\' profiles for it.',
+      );
+    }
+    return _SuggestionList(suggestions: _suggestions, onPick: _pickSuggestion);
+  }
+
+  Widget _searchHint(IconData icon, String message) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
+      child: Column(
+        children: [
+          Icon(icon, size: 28, color: AppColors.inkFaint),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, height: 1.5, color: AppColors.inkMuted),
+          ),
         ],
       ),
     );
@@ -810,63 +900,51 @@ class _Suggestion {
   final Advocate? lawyer;
 }
 
-class _SuggestionPanel extends StatelessWidget {
-  const _SuggestionPanel({required this.suggestions, required this.onPick});
+class _SuggestionList extends StatelessWidget {
+  const _SuggestionList({required this.suggestions, required this.onPick});
 
   final List<_Suggestion> suggestions;
   final ValueChanged<_Suggestion> onPick;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 6),
-      constraints: const BoxConstraints(maxHeight: 300),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+    return ListView.separated(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(0, 4, 0, bottomGutter(context)),
+      itemCount: suggestions.length,
+      separatorBuilder: (_, __) => Divider(height: 1, indent: 60, color: AppColors.border),
+      itemBuilder: (_, i) {
+        final s = suggestions[i];
+        final icon = s.lawyer != null
+            ? Icons.person_outline_rounded
+            : s.isMatter
+                ? Icons.topic_outlined
+                : Icons.gavel_rounded;
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          leading: CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.primary.withValues(alpha: 0.06),
+            child: Icon(icon, size: 19, color: AppColors.primary),
           ),
-        ],
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: suggestions.length,
-        separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
-        itemBuilder: (_, i) {
-          final s = suggestions[i];
-          final icon = s.lawyer != null
-              ? Icons.person_outline_rounded
-              : s.isMatter
-                  ? Icons.topic_outlined
-                  : Icons.gavel_rounded;
-          return ListTile(
-            dense: true,
-            leading: Icon(icon, size: 20, color: AppColors.primary),
-            title: Text(
-              s.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            subtitle: s.detail.isEmpty
-                ? null
-                : Text(
-                    s.detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
-                  ),
-            trailing: Icon(Icons.north_west_rounded, size: 16, color: AppColors.inkFaint),
-            onTap: () => onPick(s),
-          );
-        },
-      ),
+          title: Text(
+            s.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+          ),
+          subtitle: s.detail.isEmpty
+              ? null
+              : Text(
+                  s.detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted),
+                ),
+          trailing: Icon(Icons.north_west_rounded, size: 16, color: AppColors.inkFaint),
+          onTap: () => onPick(s),
+        );
+      },
     );
   }
 }
