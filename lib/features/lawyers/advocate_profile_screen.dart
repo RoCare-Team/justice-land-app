@@ -16,7 +16,6 @@ import '../../models/consultation.dart';
 import '../../services/advocate_service.dart';
 import '../../state/auth_controller.dart';
 import 'booking_sheet.dart';
-import 'enquiry_sheet.dart';
 import 'save_lawyer_button.dart';
 
 /// A lawyer's public profile, with the live consultation bar pinned at the
@@ -623,15 +622,9 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
         child: Row(
           children: [
             _actionButton(
-              icon: Icons.mail_outline_rounded,
-              label: 'Enquire',
-              onTap: () => _requireSignIn(
-                () => EnquirySheet.open(context, advocate: advocate),
-              ),
-            ),
-            _actionButton(
                 icon: Icons.chat_bubble_outline_rounded,
                 label: 'Chat',
+                rate: advocate.chatRate,
                 highlight: true,
                 onTap: () => _requireSignIn(
                   () => BookingSheet.open(
@@ -644,6 +637,7 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
             _actionButton(
                 icon: Icons.call_outlined,
                 label: 'Call',
+                rate: advocate.audioRate,
                 highlight: true,
                 onTap: () => _requireSignIn(
                   () => BookingSheet.open(
@@ -656,6 +650,7 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
             _actionButton(
                 icon: Icons.videocam_outlined,
                 label: 'Video',
+                rate: advocate.videoRate,
                 highlight: true,
                 onTap: () => _requireSignIn(
                   () => BookingSheet.open(
@@ -671,10 +666,15 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
     );
   }
 
+  /// One way to reach the lawyer, with what a minute of it costs under the
+  /// name — the same ₹/min the directory card quotes, so the price does not
+  /// change between the list and the profile. A channel with no rate set
+  /// shows just its name rather than ₹0, which would read as "free".
   Widget _actionButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    int rate = 0,
     bool highlight = false,
   }) {
     return Expanded(
@@ -709,6 +709,25 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                       color: highlight ? Colors.white : AppColors.primary,
                     ),
                   ),
+                  if (rate > 0) ...[
+                    const SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: Fmt.money(rate),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                          const TextSpan(text: '/min', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                      style: TextStyle(
+                        color: highlight
+                            ? AppColors.accent
+                            : AppColors.primary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
