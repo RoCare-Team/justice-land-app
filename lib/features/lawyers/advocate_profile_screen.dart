@@ -242,11 +242,25 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Avatar(
-                name: advocate.name,
-                photo: advocate.photo,
-                size: 74,
-                online: _online,
+              // The status sits under the photo it describes rather than on
+              // a line of its own below the whole header.
+              Column(
+                children: [
+                  Avatar(
+                    name: advocate.name,
+                    photo: advocate.photo,
+                    size: 74,
+                    online: _online,
+                  ),
+                  if (_online != null) ...[
+                    const SizedBox(height: 8),
+                    StatusChip(
+                      label: _online! ? 'Online' : 'Offline',
+                      tone: _online! ? ChipTone.success : ChipTone.neutral,
+                      icon: Icons.circle,
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -325,14 +339,6 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
               ),
             ],
           ),
-          if (_online != null) ...[
-            const SizedBox(height: 14),
-            StatusChip(
-              label: _online! ? 'Online now' : 'Currently offline',
-              tone: _online! ? ChipTone.success : ChipTone.neutral,
-              icon: Icons.circle,
-            ),
-          ],
         ],
       ),
     );
@@ -353,7 +359,10 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 2.2,
+      // Without an explicit padding a GridView takes the MediaQuery's, which
+      // here is the status bar — a blank band above the tiles.
+      padding: EdgeInsets.zero,
+      childAspectRatio: 2.5,
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
       children: [
