@@ -338,20 +338,44 @@ class _LawyersScreenState extends State<LawyersScreen> {
       _suggestLoading = true;
     });
 
+    // The matter or area the text most likely means, whose lawyers are shown
+    // too: "civil" should bring up civil lawyers, not only the words "Civil
+    // Law" to tap. They sit under a heading naming the topic, so it is plain
+    // why each is there — unlike a bare name list padded with profile hits.
+    final topic = _bestTopic(text);
+
     _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
       try {
-        // The server's q also matches profile text — "div" brings back
-        // lawyers whose About mentions divorce — so ask for a wider page and
-        // keep only the ones whose name has what was typed.
-        final page = await context
-            .read<AdvocateService>()
-            .search(AdvocateQuery(query: text, perPage: 20));
+        final service = context.read<AdvocateService>();
+        final results = await Future.wait([
+          // The server's q also matches profile text — "div" brings back
+          // lawyers whose About mentions divorce — so ask for a wider page
+          // and keep only the ones whose name has what was typed.
+          service.search(AdvocateQuery(query: text, perPage: 20)),
+          if (topic != null)
+            service.search(topic.isMatter
+                ? AdvocateQuery(subService: topic.topic, sort: 'rating', perPage: 5)
+                : AdvocateQuery(service: topic.topic, sort: 'rating', perPage: 5)),
+        ]);
         if (!mounted || seq != _suggestSeq) return;
-        final byName = page.advocates
+        final byName = results[0]
+            .advocates
             .where((a) => a.name.toLowerCase().contains(t))
-            .take(5);
+            .take(5)
+            .toList();
+        final named = {for (final a in byName) a.id};
+        final forTopic = topic == null
+            ? const <Advocate>[]
+            : results[1].advocates.where((a) => !named.contains(a.id)).toList();
         setState(() {
-          _suggestions = [...local, for (final a in byName) _Suggestion.lawyer(a)];
+          _suggestions = [
+            ...local,
+            if (byName.isNotEmpty) _Suggestion.header('Lawyers named "$text"'),
+            for (final a in byName) _Suggestion.lawyer(a),
+            if (forTopic.isNotEmpty) _Suggestion.header('${topic!.topic} lawyers'),
+            for (final a in forTopic) _Suggestion.lawyer(a),
+            if (forTopic.isNotEmpty) _Suggestion.seeAll(topic!, results[1].total),
+          ];
           _suggestLoading = false;
         });
       } on ApiException {
@@ -379,8 +403,8 @@ class _LawyersScreenState extends State<LawyersScreen> {
     setState(() {
       _suggestions = [];
       _query = s.isMatter
-          ? _query.copyWith(query: '', subService: s.label, page: 1)
-          : _query.copyWith(query: '', service: s.label, subService: '', page: 1);
+          ? _query.copyWith(query: '', subService: s.topic, page: 1)
+          : _query.copyWith(query: '', service: s.topic, subService: '', page: 1);
     });
     _load();
   }
@@ -981,7 +1005,15 @@ class _LawyersScreenState extends State<LawyersScreen> {
 
 /// One line in the search dropdown: a matter, a practice area, or a lawyer.
 class _Suggestion {
-  const _Suggestion._(this.label, this.detail, this.isMatter, this.lawyer);
+  const _Suggestion._(
+    this.label,
+    this.detail,
+    this.isMatter,
+    this.lawyer, {
+    String? topic,
+    this.isHeader = false,
+    this.isSeeAll = false,
+  }) : topic = topic ?? label;
 
   factory _Suggestion.matter(String name, String area) =>
       _Suggestion._(name, area, true, null);
@@ -996,10 +1028,30 @@ class _Suggestion {
         a,
       );
 
+  /// A section title in the list, not something to tap.
+  factory _Suggestion.header(String title) =>
+      _Suggestion._(title, '', false, null, isHeader: true);
+
+  /// The last row under a topic's lawyers: opens the whole list for it.
+  factory _Suggestion.seeAll(_Suggestion topic, int total) => _Suggestion._(
+        total > 0 ? 'See all $total ${topic.topic} lawyers' : 'See all ${topic.topic} lawyers',
+        '',
+        topic.isMatter,
+        null,
+        topic: topic.topic,
+        isSeeAll: true,
+      );
+
   final String label;
   final String detail;
   final bool isMatter;
   final Advocate? lawyer;
+
+  /// The matter or area a topic row filters by — its label, except on a
+  /// "See all" row, whose label is a sentence.
+  final String topic;
+  final bool isHeader;
+  final bool isSeeAll;
 }
 
 class _SuggestionList extends StatelessWidget {
@@ -1014,9 +1066,41 @@ class _SuggestionList extends StatelessWidget {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.fromLTRB(0, 4, 0, bottomGutter(context)),
       itemCount: suggestions.length,
-      separatorBuilder: (_, __) => Divider(height: 1, indent: 60, color: AppColors.border),
+      separatorBuilder: (_, i) => suggestions[i].isHeader ||
+              (i + 1 < suggestions.length && suggestions[i + 1].isHeader)
+          ? const SizedBox.shrink()
+          : Divider(height: 1, indent: 60, color: AppColors.border),
       itemBuilder: (_, i) {
         final s = suggestions[i];
+        if (s.isHeader) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+            child: Text(
+              s.label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: AppColors.inkMuted,
+              ),
+            ),
+          );
+        }
+        if (s.isSeeAll) {
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            title: Text(
+              s.label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+            trailing: const Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.primary),
+            onTap: () => onPick(s),
+          );
+        }
         final icon = s.lawyer != null
             ? Icons.person_outline_rounded
             : s.isMatter
