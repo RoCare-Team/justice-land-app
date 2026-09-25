@@ -123,11 +123,35 @@ class ErrorView extends StatelessWidget {
       ],
     );
 
-    return Center(
+    return _CenteredScroll(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 32, vertical: compact ? 24 : 48),
         child: content,
       ),
+    );
+  }
+}
+
+/// Centred where there is room, scrollable where there is not — an open
+/// keyboard leaves a state view a few hundred pixels, and a plain Center then
+/// overflows instead of letting the button be scrolled to.
+class _CenteredScroll extends StatelessWidget {
+  const _CenteredScroll({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedHeight) return Center(child: child);
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(child: child),
+          ),
+        );
+      },
     );
   }
 }
@@ -149,7 +173,7 @@ class EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return _CenteredScroll(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
         child: Column(
