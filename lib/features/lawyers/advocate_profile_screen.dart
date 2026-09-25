@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/config/consultation_slots.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/plan_tier_badge.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
@@ -280,17 +279,11 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                         SaveLawyerButton(advocate: advocate, size: 22),
                       ],
                     ),
-                    if (advocate.verified || advocate.paidPlanId.isNotEmpty) ...[
+                    // No Gold / Silver badge on the profile — the directory
+                    // card's medal is where the plan shows.
+                    if (advocate.verified) ...[
                       const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          if (advocate.verified) const VerifiedBadge(),
-                          if (advocate.paidPlanId.isNotEmpty)
-                            PlanTierBadge(advocate: advocate),
-                        ],
-                      ),
+                      const VerifiedBadge(),
                     ],
                     if (advocate.tagline.isNotEmpty) ...[
                       const SizedBox(height: 4),
