@@ -49,6 +49,7 @@ class LawyersScreen extends StatefulWidget {
 class _LawyersScreenState extends State<LawyersScreen> {
   late AdvocateQuery _query;
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   final _scroll = ScrollController();
 
   List<Advocate> _advocates = [];
@@ -83,6 +84,10 @@ class _LawyersScreenState extends State<LawyersScreen> {
     _searchController.text = widget.initialQuery;
     _scroll.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Opened from Home's search box: straight into typing.
+      if (GoRouterState.of(context).uri.queryParameters['focus'] == '1') {
+        _searchFocus.requestFocus();
+      }
       if (widget.initialQuery.trim().isEmpty) {
         _load();
         _loadAreas();
@@ -107,6 +112,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
     _debounce?.cancel();
     _suggestDebounce?.cancel();
     _searchController.dispose();
+    _searchFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -408,6 +414,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
               children: [
                 TextField(
                   controller: _searchController,
+                  focusNode: _searchFocus,
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
                   onSubmitted: (v) {
