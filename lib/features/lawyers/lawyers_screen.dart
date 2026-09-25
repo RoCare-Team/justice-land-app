@@ -9,7 +9,9 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../core/widgets/states.dart';
 import '../../models/advocate.dart';
+import '../../models/account.dart';
 import '../../services/advocate_service.dart';
+import '../../services/content_service.dart';
 import '../../state/location_controller.dart';
 import '../../state/saved_lawyers_controller.dart';
 import '../queries/ask_lawyer_sheet.dart';
@@ -60,6 +62,17 @@ class _LawyersScreenState extends State<LawyersScreen> {
   ApiException? _error;
   Timer? _debounce;
 
+  /// Practice areas with their matters, for matching what is typed. The
+  /// server's `q` looks at names and profile text only, so "Bail" alone finds
+  /// one lawyer while 328 list "Bail Matters" — the matter has to be sent as
+  /// a filter, and this is how the screen knows one was meant.
+  List<LegalService> _areas = [];
+
+  /// What the dropdown under the search box offers, from 3 letters on.
+  List<_Suggestion> _suggestions = [];
+  Timer? _suggestDebounce;
+  int _suggestSeq = 0;
+
   @override
   void initState() {
     super.initState();
@@ -70,12 +83,21 @@ class _LawyersScreenState extends State<LawyersScreen> {
     );
     _searchController.text = widget.initialQuery;
     _scroll.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
+      _loadAreas();
+    });
+  }
+
+  Future<void> _loadAreas() async {
+    final areas = await context.read<ContentService>().services();
+    if (mounted) _areas = areas;
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _suggestDebounce?.cancel();
     _searchController.dispose();
     _scroll.dispose();
     super.dispose();
@@ -158,11 +180,101 @@ class _LawyersScreenState extends State<LawyersScreen> {
   List<Advocate> _withDistance(List<Advocate> list) => list;
 
   void _onSearchChanged(String value) {
+    _suggest(value);
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () {
-      setState(() => _query = _query.copyWith(query: value.trim(), page: 1));
-      _load();
+    _debounce = Timer(const Duration(milliseconds: 400), () => _applySearch(value));
+  }
+
+  /// Runs what is in the box. Text that names a matter or a practice area
+  /// exactly becomes that filter; anything else is a name/keyword search.
+  void _applySearch(String value) {
+    final text = value.trim();
+    final hit = _exactTopic(text);
+    setState(() {
+      _query = hit == null
+          ? _query.copyWith(query: text, page: 1)
+          : hit.isMatter
+              ? _query.copyWith(query: '', subService: hit.label, page: 1)
+              : _query.copyWith(query: '', service: hit.label, subService: '', page: 1);
     });
+    _load();
+  }
+
+  _Suggestion? _exactTopic(String text) {
+    final t = text.toLowerCase();
+    if (t.isEmpty) return null;
+    for (final a in _areas) {
+      if (a.name.toLowerCase() == t) return _Suggestion.area(a.name);
+      for (final m in a.subServices) {
+        if (m.name.toLowerCase() == t) return _Suggestion.matter(m.name, a.name);
+      }
+    }
+    return null;
+  }
+
+  /// Matters and practice areas straight away, from the list already on the
+  /// phone; lawyers by name a moment later, from the server.
+  void _suggest(String value) {
+    final text = value.trim();
+    _suggestDebounce?.cancel();
+    final seq = ++_suggestSeq;
+    if (text.length < 3) {
+      if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
+      return;
+    }
+    final t = text.toLowerCase();
+    final areas = <_Suggestion>[];
+    final matters = <_Suggestion>[];
+    final seen = <String>{};
+    for (final a in _areas) {
+      if (a.name.toLowerCase().contains(t)) areas.add(_Suggestion.area(a.name));
+      for (final m in a.subServices) {
+        // The same matter can sit under two areas; offer it once.
+        if (m.name.toLowerCase().contains(t) && seen.add(m.name.toLowerCase())) {
+          matters.add(_Suggestion.matter(m.name, a.name));
+        }
+      }
+    }
+    final local = [...matters.take(6), ...areas.take(3)];
+    setState(() => _suggestions = local);
+
+    _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final page = await context
+            .read<AdvocateService>()
+            .search(AdvocateQuery(query: text, perPage: 4));
+        if (!mounted || seq != _suggestSeq) return;
+        setState(() => _suggestions = [
+              ...local,
+              for (final a in page.advocates) _Suggestion.lawyer(a),
+            ]);
+      } on ApiException {
+        // Names are a nicety on top of the matters; keep what is shown.
+      }
+    });
+  }
+
+  void _pickSuggestion(_Suggestion s) {
+    FocusScope.of(context).unfocus();
+    _debounce?.cancel();
+    _suggestDebounce?.cancel();
+    _suggestSeq++;
+    final lawyer = s.lawyer;
+    if (lawyer != null) {
+      setState(() => _suggestions = []);
+      context.push('/lawyers/${lawyer.profilePath}');
+      return;
+    }
+    // A topic becomes a filter pill, so the box is cleared rather than left
+    // holding text that is no longer what the list is searched by.
+    _searchController.clear();
+    setState(() {
+      _suggestions = [];
+      _query = s.isMatter
+          ? _query.copyWith(query: '', subService: s.label, page: 1)
+          : _query.copyWith(query: '', service: s.label, subService: '', page: 1);
+    });
+    _load();
   }
 
   /// The filter set opens as a screen of its own — six filters, each with a
@@ -240,8 +352,14 @@ class _LawyersScreenState extends State<LawyersScreen> {
                   controller: _searchController,
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
+                  onSubmitted: (v) {
+                    _debounce?.cancel();
+                    _suggestSeq++;
+                    setState(() => _suggestions = []);
+                    _applySearch(v);
+                  },
                   decoration: InputDecoration(
-                    hintText: 'Search by name or keyword',
+                    hintText: 'Search by name, practice area or matter',
                     prefixIcon: const Icon(Icons.search_rounded, size: 20),
                     suffixIcon: _searchController.text.isEmpty
                         ? null
@@ -254,6 +372,11 @@ class _LawyersScreenState extends State<LawyersScreen> {
                           ),
                   ),
                 ),
+                if (_suggestions.isNotEmpty)
+                  _SuggestionPanel(
+                    suggestions: _suggestions,
+                    onPick: _pickSuggestion,
+                  ),
                 const SizedBox(height: 10),
                 _sortChips(),
                 if (_query.hasFilters || location.hasCity) ...[
@@ -282,6 +405,11 @@ class _LawyersScreenState extends State<LawyersScreen> {
                         if (_query.service.isNotEmpty)
                           _pill(Icons.gavel_rounded, _query.service, onClear: () {
                             setState(() => _query = _query.copyWith(service: ''));
+                            _load();
+                          }),
+                        if (_query.subService.isNotEmpty)
+                          _pill(Icons.topic_outlined, _query.subService, onClear: () {
+                            setState(() => _query = _query.copyWith(subService: ''));
                             _load();
                           }),
                         if (_query.court.isNotEmpty)
@@ -587,6 +715,90 @@ class _LawyersScreenState extends State<LawyersScreen> {
           return AdvocateCard(
             advocate: advocate,
             online: _online.isEmpty ? null : _online.contains(advocate.id),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// One line in the search dropdown: a matter, a practice area, or a lawyer.
+class _Suggestion {
+  const _Suggestion._(this.label, this.detail, this.isMatter, this.lawyer);
+
+  factory _Suggestion.matter(String name, String area) =>
+      _Suggestion._(name, area, true, null);
+  factory _Suggestion.area(String name) =>
+      _Suggestion._(name, 'Practice area', false, null);
+  factory _Suggestion.lawyer(Advocate a) => _Suggestion._(
+        a.name,
+        [a.specializations.take(2).join(', '), a.city]
+            .where((s) => s.isNotEmpty)
+            .join(' · '),
+        false,
+        a,
+      );
+
+  final String label;
+  final String detail;
+  final bool isMatter;
+  final Advocate? lawyer;
+}
+
+class _SuggestionPanel extends StatelessWidget {
+  const _SuggestionPanel({required this.suggestions, required this.onPick});
+
+  final List<_Suggestion> suggestions;
+  final ValueChanged<_Suggestion> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      constraints: const BoxConstraints(maxHeight: 300),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.ink.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: suggestions.length,
+        separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
+        itemBuilder: (_, i) {
+          final s = suggestions[i];
+          final icon = s.lawyer != null
+              ? Icons.person_outline_rounded
+              : s.isMatter
+                  ? Icons.topic_outlined
+                  : Icons.gavel_rounded;
+          return ListTile(
+            dense: true,
+            leading: Icon(icon, size: 20, color: AppColors.primary),
+            title: Text(
+              s.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            subtitle: s.detail.isEmpty
+                ? null
+                : Text(
+                    s.detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
+                  ),
+            trailing: Icon(Icons.north_west_rounded, size: 16, color: AppColors.inkFaint),
+            onTap: () => onPick(s),
           );
         },
       ),
