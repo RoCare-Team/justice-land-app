@@ -162,7 +162,7 @@ class MoreScreen extends StatelessWidget {
 
     if (yes != true) return;
     await auth.signOut();
-    if (context.mounted) context.go('/');
+    if (context.mounted) context.go('/role');
   }
 }
 

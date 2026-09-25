@@ -456,7 +456,7 @@ class _AdvocateProfile extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () async {
               await context.read<AuthController>().signOut();
-              if (context.mounted) context.go('/');
+              if (context.mounted) context.go('/role');
             },
             icon: const Icon(Icons.logout_rounded, size: 18),
             label: const Text('Sign out'),
