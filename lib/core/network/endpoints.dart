@@ -290,6 +290,12 @@ class Endpoints {
   /// GET → the lawyer's balance, payouts and `bankAccounts` (last four only).
   static const String payouts = '/api/dashboard/payouts';
 
+  // ── Voice search ─────────────────────────────────────────────────────────
+  /// POST multipart `audio` (or JSON { transcript, city }) → the spoken
+  /// problem understood, and the lawyers for it. Speech-to-text and the
+  /// classification both run on the server; nothing here needs an AI key.
+  static const String voiceLegalSearch = '/api/voice/legal-search';
+
   // ── Misc ─────────────────────────────────────────────────────────────────
   /// POST { name, email, phone, subject, message }
   static const String contact = '/api/contact';

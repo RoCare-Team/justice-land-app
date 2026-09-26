@@ -16,6 +16,7 @@ import 'services/content_service.dart';
 import 'services/dashboard_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/membership_service.dart';
+import 'services/voice_service.dart';
 import 'services/push_service.dart';
 import 'services/query_service.dart';
 import 'services/wallet_service.dart';
@@ -88,6 +89,7 @@ class JusticelandApp extends StatelessWidget {
         Provider(create: (_) => MarketplaceService(api)),
         Provider(create: (_) => QueryService(api)),
         Provider(create: (_) => MembershipService(api)),
+        Provider(create: (_) => VoiceService(api)),
         Provider(create: (context) => PushService(context.read<DashboardService>())),
 
         // Controllers hold what the server last said.

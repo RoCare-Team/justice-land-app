@@ -15,6 +15,7 @@ import '../../state/auth_controller.dart';
 import '../../state/location_controller.dart';
 import '../lawyers/advocate_card.dart';
 import '../queries/ask_lawyer_sheet.dart';
+import '../voice/voice_search_sheet.dart';
 import 'location_sheet.dart';
 
 /// The home screen — the same sections the website's homepage has, in the
@@ -290,6 +291,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 16),
             _searchField(),
             const SizedBox(height: 10),
+            _voiceRow(),
+            const SizedBox(height: 10),
             // Where the lawyers below are being drawn from. Tappable, because
             // a client whose city is wrong needs to fix it here, not hunt for
             // a setting.
@@ -323,6 +326,60 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The spoken way in, under the search box.
+  ///
+  /// The search box asks which practice area you want, which is a question
+  /// someone with an unpaid salary cannot answer — they know what happened to
+  /// them, not what it is called. This asks them to say it instead, in
+  /// whichever language they think in, and does the naming on the server.
+  Widget _voiceRow() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => VoiceSearchSheet.open(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.mic_rounded, size: 17, color: AppColors.primaryDark),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Apni problem boliye',
+                    style: TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    'Hindi me bhi — lawyer khud dhoond denge',
+                    style: TextStyle(fontSize: 11, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                size: 20, color: Colors.white.withValues(alpha: 0.8)),
           ],
         ),
       ),
