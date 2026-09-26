@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 
-val hasUploadKey = keystoreProperties.containsKey("storeFile")
+val   = keystoreProperties.containsKey("storeFile")
 
 // Firebase (push notifications — see lib/services/push_service.dart) reads its
 // project config from this file, which is not committed (real credentials).

@@ -97,6 +97,7 @@ class Consultation {
     required this.type,
     required this.status,
     required this.isResume,
+    this.discount,
     required this.messages,
     required this.call,
     this.createdAt,
@@ -139,6 +140,10 @@ class Consultation {
 
   /// A free reconnection of leftover time. Labelled as such rather than "₹0".
   final bool isResume;
+
+  /// A discount JusticeLand granted on this session, applied when it settles.
+  /// Null on almost every session — most are charged in full.
+  final SessionDiscount? discount;
 
   final List<ChatMessage> messages;
   final CallState? call;
@@ -238,7 +243,20 @@ class Consultation {
 
   /// What this session has run up so far, second by second after the free
   /// opening — the same sum the server settles with. A resume stays ₹0.
+  ///
+  /// A discount comes off here rather than at the end: this figure is shown on
+  /// screen as what the session is costing, and one that is quietly half wrong
+  /// until the bill arrives is worse than no figure at all.
   double get runningCost {
+    if (isResume) return 0;
+    final billable = elapsed.inSeconds - freeSeconds;
+    if (billable <= 0) return 0;
+    final full = (billable * rate / 60 * 100).round() / 100;
+    return discount?.applyTo(full) ?? full;
+  }
+
+  /// The same sum before any discount, for showing what was struck through.
+  double get fullCost {
     if (isResume) return 0;
     final billable = elapsed.inSeconds - freeSeconds;
     if (billable <= 0) return 0;
@@ -272,6 +290,7 @@ class Consultation {
         type: ConsultationType.parse(J.str(j['type'], 'chat')),
         status: ConsultationStatus.parse(J.str(j['status'], 'pending')),
         isResume: J.flag(j['isResume']),
+        discount: SessionDiscount.fromJson(j['discount']),
         messages: J.models(j['messages'], ChatMessage.fromJson),
         call: j['call'] == null ? null : CallState.fromJson(J.map(j['call'])),
         createdAt: J.date(j['createdAt']),
@@ -402,4 +421,47 @@ class ResumableSession {
         advocateName: J.str(j['advocateName']),
         endedAt: J.date(j['endedAt']),
       );
+}
+
+/// A discount an admin granted on one session.
+///
+/// Mirrors what the website sends on the session: the shape of the discount
+/// and a ready-made label, so the app never has to word "50% off" itself and
+/// can never word it differently from the panel that granted it.
+class SessionDiscount {
+  const SessionDiscount({
+    required this.kind,
+    required this.value,
+    required this.label,
+    required this.note,
+  });
+
+  /// 'percent' or 'flat'.
+  final String kind;
+  final double value;
+
+  /// "50% off" / "₹100 off", as the server wrote it.
+  final String label;
+  final String note;
+
+  /// A bill with this discount taken off, never below zero.
+  double applyTo(double amount) {
+    if (amount <= 0 || value <= 0) return amount <= 0 ? 0 : amount;
+    final off = kind == 'flat' ? value : amount * value / 100;
+    final left = amount - (off > amount ? amount : off);
+    return (left * 100).round() / 100;
+  }
+
+  static SessionDiscount? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final map = J.map(raw);
+    final value = J.dbl(map['value']);
+    if (value <= 0) return null;
+    return SessionDiscount(
+      kind: J.str(map['kind'], 'percent'),
+      value: value,
+      label: J.str(map['label']),
+      note: J.str(map['note']),
+    );
+  }
 }

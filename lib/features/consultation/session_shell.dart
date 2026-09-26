@@ -104,7 +104,13 @@ class SessionHeader extends StatelessWidget {
                         ),
                         _meter(
                           Icons.currency_rupee_rounded,
-                          session.isResume ? 'Free resume' : 'Cost so far',
+                          // A discounted session says so here rather than just
+                          // showing a smaller number than the clock implies.
+                          session.isResume
+                              ? 'Free resume'
+                              : session.discount != null
+                                  ? session.discount!.label
+                                  : 'Cost so far',
                           session.isResume ? '₹0' : Fmt.amount(session.runningCost),
                         ),
                         Container(
