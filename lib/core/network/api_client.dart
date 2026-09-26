@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -119,6 +120,12 @@ class ApiClient {
     final data = res.data;
 
     if (status >= 200 && status < 300) return data;
+
+    // What the server said, for whoever is reading the device log — the
+    // message shown to the user is deliberately short.
+    final body = data?.toString() ?? '';
+    debugPrint('ApiClient: ${res.requestOptions.method} ${res.requestOptions.path} → $status '
+        '${body.length > 300 ? body.substring(0, 300) : body}');
 
     // The API answers errors as { error, message? }. `error` is sometimes a
     // code the flow branches on ('insufficient', 'offline'), sometimes the

@@ -58,6 +58,9 @@ typedef DayEarning = ({DateTime day, int amount, bool isToday});
 /// why the shell pauses it while the app is in the background.
 class LawyerController extends ChangeNotifier {
   LawyerController(this._consults, this._dashboard, this._auth, [this._push]) {
+    _push?.onOpened = ringFor;
+    _push?.onCallAccepted = acceptFromCallScreen;
+    _push?.onCallDeclined = declineFromCallScreen;
     _auth.addListener(_onAuthChanged);
     _onAuthChanged();
   }
@@ -113,7 +116,50 @@ class LawyerController extends ChangeNotifier {
   Consultation? takeAnnouncement() {
     final next = _toAnnounce;
     _toAnnounce = null;
+    if (next != null) {
+      _shown.add(next.id);
+      // The sheet rings for it now — the full-screen call UI must not too.
+      _push?.dismissCall(next.id);
+    }
     return next;
+  }
+
+  /// Accept was pressed on the full-screen call UI. PushService has already
+  /// opened the session (which accepts it); the in-app sheet must just not
+  /// ring for it as well.
+  void acceptFromCallScreen(String consultationId) => _quiet(consultationId);
+
+  /// Decline was pressed on the full-screen call UI.
+  Future<void> declineFromCallScreen(String consultationId) async {
+    _quiet(consultationId);
+    try {
+      await reject(consultationId);
+    } on ApiException catch (e) {
+      debugPrint('LawyerController: decline from call screen failed: ${e.message}');
+    }
+  }
+
+  /// Answered on the call UI — the in-app sheet must not ring for it too.
+  void _quiet(String id) {
+    _announced.add(id);
+    _shown.add(id);
+    if (_toAnnounce?.id == id) _toAnnounce = null;
+  }
+
+  /// Requests the shell has already put up a ringing sheet for.
+  final Set<String> _shown = {};
+
+  /// Set when a request notification was tapped: the next inbox read rings
+  /// for that request ('' = the newest one waiting), even though a cold
+  /// start's first read would otherwise stay quiet.
+  String? _ringFor;
+
+  /// A request notification was tapped — read the inbox now and open the
+  /// ringing sheet for [consultationId], or for the newest waiting request
+  /// when the push did not name one.
+  void ringFor(String? consultationId) {
+    _ringFor = consultationId ?? '';
+    if (_running) refreshInbox();
   }
 
   /// Everything seen so far — the live inbox laid over the history, so a
@@ -241,6 +287,8 @@ class LawyerController extends ChangeNotifier {
     _earnings = Wallet.empty;
     _inboxLoaded = _historyLoaded = _earningsLoaded = false;
     _announced.clear();
+    _shown.clear();
+    _ringFor = null;
     _announceReady = false;
     _toAnnounce = null;
     notifyListeners();
@@ -278,6 +326,18 @@ class LawyerController extends ChangeNotifier {
         }
       }
       _announceReady = true;
+      unawaited(_push?.dismissCallsNotWaiting(
+        list.where((c) => c.status.isWaiting).map((c) => c.id).toSet(),
+      ));
+
+      final wanted = _ringFor;
+      if (wanted != null) {
+        _ringFor = null;
+        final waiting = list.where((c) => c.status.isWaiting).toList()
+          ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+        final match = waiting.where((c) => wanted.isEmpty || c.id == wanted).firstOrNull;
+        if (match != null && !_shown.contains(match.id)) _toAnnounce = match;
+      }
 
       // A session that just left the live list has settled — its earnings and
       // history row are worth reading now rather than on the slow tick.

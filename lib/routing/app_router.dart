@@ -53,6 +53,11 @@ class AppRouter {
       path == '/blogs' ||
       path.startsWith('/blogs/');
 
+  /// `?answer=1` on a session route: opened by the lawyer's Accept, and the
+  /// screen sends the accept itself (SessionController.start).
+  static bool _answering(GoRouterState state) =>
+      state.uri.queryParameters['answer'] == '1';
+
   /// The most recently built router. Set by `build()` so code outside the
   /// widget tree — the push-notification tap handler, which can run before
   /// any screen exists to hold a BuildContext — still has a way to navigate.
@@ -228,17 +233,26 @@ class AppRouter {
         GoRoute(
           path: '/consultation/:id/chat',
           builder: (context, state) =>
-              ChatScreen(consultationId: state.pathParameters['id']!),
+              ChatScreen(
+                consultationId: state.pathParameters['id']!,
+                acceptOnOpen: _answering(state),
+              ),
         ),
         GoRoute(
           path: '/consultation/:id/video',
           builder: (context, state) =>
-              VideoCallScreen(consultationId: state.pathParameters['id']!),
+              VideoCallScreen(
+                consultationId: state.pathParameters['id']!,
+                acceptOnOpen: _answering(state),
+              ),
         ),
         GoRoute(
           path: '/consultation/:id/audio',
           builder: (context, state) =>
-              AudioCallScreen(consultationId: state.pathParameters['id']!),
+              AudioCallScreen(
+                consultationId: state.pathParameters['id']!,
+                acceptOnOpen: _answering(state),
+              ),
         ),
 
         GoRoute(path: '/blogs', builder: (_, __) => const BlogsScreen()),

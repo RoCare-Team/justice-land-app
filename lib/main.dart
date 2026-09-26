@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +19,7 @@ import 'services/membership_service.dart';
 import 'services/push_service.dart';
 import 'services/query_service.dart';
 import 'services/wallet_service.dart';
+import 'features/consultation/active_call_bar.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'state/auth_controller.dart';
 import 'state/lawyer_controller.dart';
@@ -46,6 +49,11 @@ Future<void> main() async {
   // The cookie jar has to exist before the first request — it *is* the
   // session, so a request made before it loads would arrive signed out.
   final api = await ApiClient.init();
+
+  // Accept on the incoming-call screen is what launched the app: tell the
+  // server now, before the sign-in check and the first screen, so the
+  // client's phone is already ringing by the time the call screen opens.
+  unawaited(acceptAnsweredCallEarly(ConsultationService(api)));
 
   // Read here rather than from the splash screen. The router leaves /splash
   // the moment the session resolves, and that beat an async preference read
@@ -162,7 +170,9 @@ class _AppState extends State<_App> {
           data: media.copyWith(
             textScaler: media.textScaler.clamp(maxScaleFactor: 1.3),
           ),
-          child: _BackGuard(child: child ?? const SizedBox.shrink()),
+          // The green "call in progress" strip, over every screen while an
+          // audio consultation runs without its own screen showing.
+          child: _BackGuard(child: ActiveCallBar(child: child ?? const SizedBox.shrink())),
         );
       },
     );

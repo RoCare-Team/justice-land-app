@@ -145,6 +145,13 @@ class Advocate {
     return planId;
   }
 
+  /// Whether the lawyer has put up a profile photograph. Clients are only
+  /// offered a call or video call with a lawyer whose face they can see.
+  bool get hasPhoto {
+    final p = photo.trim();
+    return p.isNotEmpty && p != 'null';
+  }
+
   bool get offersChat => chatRate > 0;
   bool get offersAudio => audioRate > 0;
   bool get offersVideo => videoRate > 0;

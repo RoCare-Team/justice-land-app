@@ -7,14 +7,12 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
 import '../../models/consultation.dart';
+import '../../state/session_controller.dart';
 import '../../state/auth_controller.dart';
 
 /// The live meter every consultation screen carries: who you are talking to,
-/// how long it has run since the lawyer accepted, and what it has cost so far.
-///
-/// Showing the running cost is not decoration. The session bills by the minute
-/// against a wallet, and a client who cannot see the meter cannot make an
-/// informed decision about when to stop.
+/// and how long it has run since the lawyer accepted. The running cost is
+/// deliberately not shown mid-session; the bill appears once it ends.
 class SessionHeader extends StatelessWidget {
   const SessionHeader({
     super.key,
@@ -95,28 +93,6 @@ class SessionHeader extends StatelessWidget {
                           Icons.timer_outlined,
                           'Duration',
                           Fmt.clock(session.elapsed),
-                        ),
-                        Container(
-                          height: 26,
-                          width: 1,
-                          color: AppColors.border,
-                          margin: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        _meter(
-                          Icons.currency_rupee_rounded,
-                          session.isResume ? 'Free resume' : 'Cost so far',
-                          session.isResume ? '₹0' : Fmt.amount(session.runningCost),
-                        ),
-                        Container(
-                          height: 26,
-                          width: 1,
-                          color: AppColors.border,
-                          margin: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        _meter(
-                          Icons.speed_rounded,
-                          'Rate',
-                          session.isResume ? '—' : '₹${session.rate}/min',
                         ),
                       ],
                     ),
@@ -434,6 +410,31 @@ class EndedPanel extends StatelessWidget {
 /// Confirms ending a live session, because it settles the bill and cannot be
 /// undone — the leftover comes back as a free resume, but the minutes used are
 /// charged either way.
+/// Ends the consultation and, when the server refuses, says so — with a way
+/// to try again — rather than leaving the screen as it was, which read as
+/// "the button does nothing" while the session went on billing.
+Future<void> endSessionOrExplain(BuildContext context, SessionController controller) async {
+  if (await controller.end()) return;
+  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          'The consultation could not be ended '
+          '(${(controller.error ?? 'the server did not answer').replaceAll(RegExp(r'[.\s]+$'), '')}). '
+          'It is still running.',
+        ),
+        action: SnackBarAction(
+          label: 'Try again',
+          onPressed: () => endSessionOrExplain(context, controller),
+        ),
+      ),
+    );
+}
+
 Future<bool> confirmEndSession(BuildContext context, Consultation session) async {
   final result = await showDialog<bool>(
     context: context,

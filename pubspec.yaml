@@ -1,7 +1,7 @@
 name: flutter_legal_care
 description: Justiceland — mobile client for the Justiceland lawyer platform.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.8+8
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -70,6 +70,13 @@ dependencies:
   # picker cannot choose.
   file_picker: ^10.1.9
   shimmer: ^3.0.0
+  # The incoming-request ring while the app is open (IncomingRequestSheet).
+  # Pinned: audioplayers_android 5.3.0+ drops `apply plugin: 'kotlin-android'`
+  # for AGP 9's built-in Kotlin and fails to build on this project's AGP 8.
+  audioplayers: 6.6.0
+  audioplayers_android: 5.2.1
+  flutter_callkit_incoming: ^3.1.6
+  android_intent_plus: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -87,6 +94,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/sounds/
 
 # Launcher icons, generated with `dart run flutter_launcher_icons`.
 #

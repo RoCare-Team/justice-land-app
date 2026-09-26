@@ -150,6 +150,18 @@ class ConsultationService {
     return Consultation.fromJson(J.map(J.map(data)['session']));
   }
 
+  /// Tells the other side this one is typing. Fire-and-forget: a lost
+  /// "typing" is not worth an error.
+  Future<void> typing(String id) async {
+    await _api.post(Endpoints.consultationTyping(id), body: const {});
+  }
+
+  /// Everything received up to [upTo] has been read — the other side's
+  /// blue ticks.
+  Future<void> markRead(String id, DateTime upTo) async {
+    await _api.post(Endpoints.consultationRead(id), body: {'upTo': upTo.toUtc().toIso8601String()});
+  }
+
   // ── Video call signalling ────────────────────────────────────────────────
   // Only the handshake goes through the server. Once the two peers connect,
   // audio and video flow directly between the devices.

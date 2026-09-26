@@ -44,7 +44,10 @@ final List<RouteBase> lawyerRoutes = [
     routes: [
       GoRoute(path: '/lawyer', builder: (_, __) => const LawyerHomeScreen()),
       GoRoute(path: '/lawyer/queries', builder: (_, __) => const LawyerQueriesScreen()),
-      GoRoute(path: '/lawyer/requests', builder: (_, __) => const LawyerRequestsScreen()),
+      GoRoute(
+        path: '/lawyer/requests',
+        builder: (_, state) => LawyerRequestsScreen(initialTab: state.uri.queryParameters['tab']),
+      ),
       GoRoute(path: '/lawyer/consultations', builder: (_, __) => const LawyerCasesScreen()),
       GoRoute(path: '/lawyer/profile', builder: (_, __) => const LawyerProfileScreen()),
     ],

@@ -126,6 +126,12 @@ class Endpoints {
   static String consultationMessages(String id) =>
       '/api/consultations/$id/messages';
 
+  /// POST {} — "I am typing": the other side sees it for a few seconds.
+  static String consultationTyping(String id) => '/api/consultations/$id/typing';
+
+  /// POST { upTo } — everything received up to this moment has been read.
+  static String consultationRead(String id) => '/api/consultations/$id/read';
+
   /// GET ?since= · POST { action: start|accept|reject|end|signal, … }
   static String consultationCall(String id) => '/api/consultations/$id/call';
 

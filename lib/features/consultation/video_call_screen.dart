@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/platform/pip.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
@@ -29,16 +30,23 @@ import 'session_shell.dart';
 ///
 /// Direction mirrors the booking: the client rings, the lawyer answers.
 class VideoCallScreen extends StatelessWidget {
-  const VideoCallScreen({super.key, required this.consultationId});
+  const VideoCallScreen({super.key, required this.consultationId, this.acceptOnOpen = false});
 
   final String consultationId;
+
+  /// Opened by the lawyer's Accept: the screen sends the accept itself, so it
+  /// shows at once instead of after the server answers.
+  final bool acceptOnOpen;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) =>
-          SessionController(context.read<ConsultationService>(), consultationId)
-            ..start(),
+          SessionController(
+        context.read<ConsultationService>(),
+        consultationId,
+        cancelIfLeftWaiting: !context.read<AuthController>().isAdvocate,
+      )..start(acceptFirst: acceptOnOpen),
       child: _VideoCallView(consultationId: consultationId),
     );
   }
@@ -63,13 +71,52 @@ class _VideoCallViewState extends State<_VideoCallView> {
   MediaStream? _localStream;
   Timer? _signalPoll;
 
+  /// Fetched when the screen opens, alongside the camera, rather than after
+  /// the call has been started.
+  late final Future<List<Map<String, dynamic>>> _iceServers;
+
+  /// Like the audio call, the video call rings and answers itself: the
+  /// lawyer already agreed by accepting, so a second tap on each side only
+  /// adds seconds of "Connecting…".
+  bool _autoStarted = false;
+  bool _autoAnswered = false;
+
+  /// The lawyer's side before the client has rung: reads the call itself so
+  /// the ring is answered the moment it starts.
+  Timer? _ringWatch;
+
   String _callId = '';
   int _since = 0;
   bool _ready = false;
+
+  /// Leaving the app shrinks the call into a floating window (see [Pip])
+  /// only while a call is actually running here.
+  bool _pipArmed = false;
+
+  void _armPip(bool armed) {
+    if (armed == _pipArmed) return;
+    _pipArmed = armed;
+    unawaited(Pip.setInCall(armed));
+  }
+
+  /// Back (the phone's or the arrow's) on a running call: shrink into the
+  /// floating window. Closing this screen would hang the call up, and there
+  /// would be no way back to it.
+  Future<void> _minimize() async {
+    if (await Pip.enter() || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('The call is still on. Use the red button to end it.')),
+    );
+  }
   bool _connecting = false;
   bool _connected = false;
   bool _micOn = true;
   bool _cameraOn = true;
+
+  /// Which camera the local stream is on. Only the front camera is shown
+  /// mirrored, the way every camera app does; mirroring the back camera
+  /// flips the room — and any document held up to it — the wrong way round.
+  bool _frontCamera = true;
   String _error = '';
 
   /// Candidates already sent to the peer, so a re-poll does not resend them.
@@ -96,6 +143,85 @@ class _VideoCallViewState extends State<_VideoCallView> {
     _remoteSet = false;
     _pendingIce.clear();
     _sentCandidates.clear();
+    _queuedCandidates.clear();
+  }
+
+  /// This side's connection, built ahead of the call (see [_prewarm]) so its
+  /// network search — STUN, the TURN relay — is done or under way by the
+  /// time the call needs it. On the client's side it already holds its offer.
+  Future<RTCPeerConnection>? _prePeer;
+  RTCSessionDescription? _preOffer;
+
+  /// Candidates found before the call had an id to send them under.
+  final List<String> _queuedCandidates = [];
+
+  Future<void> _flushQueuedCandidates() {
+    final queued = List<String>.of(_queuedCandidates);
+    _queuedCandidates.clear();
+    return Future.wait(queued.map((c) => _pushSignal(candidate: c)));
+  }
+
+  /// The client's connection (offer and all) while it waits for the lawyer
+  /// to accept; the lawyer's while the client's phone is still ringing it.
+  void _prewarm() {
+    if (!mounted || !_ready || _prePeer != null || _peer != null || _connecting || _connected) return;
+    _callId = '';
+    _resetHandshake();
+    _prePeer = _isAdvocate ? _createPeer() : _buildOffer();
+    _prePeer!.then((_) {}, onError: (_) {});
+  }
+
+  Future<RTCPeerConnection> _buildOffer() async {
+    final peer = await _createPeer();
+    final offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    _preOffer = offer;
+    return peer;
+  }
+
+  /// The prepared connection, or a fresh one if none was prepared or it
+  /// failed to build.
+  Future<RTCPeerConnection> _takePrepared() async {
+    final prepared = _prePeer;
+    _prePeer = null;
+    if (prepared != null) {
+      try {
+        return await prepared;
+      } catch (_) {
+        /* build it again below */
+      }
+    }
+    _resetHandshake();
+    return _isAdvocate ? _createPeer() : _buildOffer();
+  }
+
+  /// Applies the client's offer and returns this side's answer, ready to send.
+  Future<String> _answerOffer(RTCPeerConnection peer, String offer) async {
+    final map = jsonDecode(offer) as Map<String, dynamic>;
+    await peer.setRemoteDescription(
+      RTCSessionDescription(map['sdp'] as String?, map['type'] as String?),
+    );
+    _remoteSet = true;
+    final answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    return jsonEncode(answer.toMap());
+  }
+
+  Future<void> _addCandidates(RTCPeerConnection peer, List<String> candidates) async {
+    for (final raw in candidates) {
+      try {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        await peer.addCandidate(
+          RTCIceCandidate(
+            map['candidate'] as String?,
+            map['sdpMid'] as String?,
+            (map['sdpMLineIndex'] as num?)?.toInt(),
+          ),
+        );
+      } catch (_) {
+        /* one malformed candidate must not stop the rest arriving */
+      }
+    }
   }
 
   @override
@@ -106,13 +232,16 @@ class _VideoCallViewState extends State<_VideoCallView> {
       () => context.read<ConsultationService>().callConnected(widget.consultationId),
       () => context.read<SessionController>().reload(),
     );
+    _iceServers = _fetchIceServers();
     WidgetsBinding.instance.addPostFrameCallback((_) => _prepare());
   }
 
   @override
   void dispose() {
+    if (_pipArmed) unawaited(Pip.setInCall(false));
     _clock.cancel();
     _signalPoll?.cancel();
+    _ringWatch?.cancel();
     _teardown();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -147,28 +276,79 @@ class _VideoCallViewState extends State<_VideoCallView> {
       _localRenderer.srcObject = _localStream;
       if (!mounted) return;
       setState(() => _ready = true);
+      _prewarm();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Could not open the camera. Close other apps using it and try again.');
     }
   }
 
-  Future<RTCPeerConnection> _createPeer() async {
-    final service = context.read<ConsultationService>();
-    // Fetched, not hardcoded: a call between two mobile networks usually needs
-    // the TURN relay, and those credentials rotate.
-    List<Map<String, dynamic>> iceServers;
+  /// Fetched, not hardcoded: a call between two mobile networks usually needs
+  /// the TURN relay, and those credentials rotate.
+  Future<List<Map<String, dynamic>>> _fetchIceServers() async {
     try {
-      iceServers = await service.iceServers();
+      return await context.read<ConsultationService>().iceServers();
     } on ApiException {
-      iceServers = [
+      return [
         {'urls': 'stun:stun.l.google.com:19302'},
       ];
     }
+  }
+
+  void _autoDrive(Consultation session, bool isAdvocate) {
+    if (!_ready || _connecting || _connected || _error.isNotEmpty) return;
+    if (!isAdvocate && !_autoStarted) {
+      _autoStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startCall();
+      });
+    } else if (isAdvocate && !_autoAnswered) {
+      if (session.call?.isRinging ?? false) {
+        _answerRing(null);
+      } else {
+        _watchForRing();
+      }
+    }
+  }
+
+  /// [ring]: the call as the ring watch read it, offer usually included.
+  void _answerRing(CallState? ring) {
+    if (_autoAnswered) return;
+    _autoAnswered = true;
+    _ringWatch?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _answer(accept: true, ring: ring);
+    });
+  }
+
+  void _watchForRing() {
+    if (_ringWatch?.isActive ?? false) return;
+    final service = context.read<ConsultationService>();
+    _ringWatch = Timer.periodic(AppConfig.callSignalPollConnecting, (_) async {
+      if (!mounted || _autoAnswered || _connecting || _connected) {
+        _ringWatch?.cancel();
+        return;
+      }
+      try {
+        final call = await service.callState(widget.consultationId);
+        if (call.isRinging && mounted) _answerRing(call);
+      } on ApiException {
+        /* the next tick asks again */
+      }
+    });
+  }
+
+  Future<RTCPeerConnection> _createPeer() async {
+    final iceServers = await _iceServers;
 
     final peer = await createPeerConnection({
       'iceServers': iceServers,
       'sdpSemantics': 'unified-plan',
+      // Gathers candidates (and allocates the TURN relay) as soon as the
+      // connection exists, not when the handshake begins.
+      'iceCandidatePoolSize': 2,
+      'bundlePolicy': 'max-bundle',
+      'rtcpMuxPolicy': 'require',
     });
 
     final stream = _localStream;
@@ -189,7 +369,11 @@ class _VideoCallViewState extends State<_VideoCallView> {
       final json = jsonEncode(candidate.toMap());
       if (_sentCandidates.contains(json)) return;
       _sentCandidates.add(json);
-      _pushSignal(candidate: json);
+      if (_callId.isEmpty) {
+        _queuedCandidates.add(json);
+      } else {
+        _pushSignal(candidate: json);
+      }
     };
 
     peer.onConnectionState = (state) {
@@ -197,6 +381,9 @@ class _VideoCallViewState extends State<_VideoCallView> {
         _hangUp(failed: true);
       }
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+        // Handshake done: back to the relaxed rate, which now only notices
+        // the other side hanging up.
+        _beginPolling(connecting: false);
         if (mounted) setState(() => _connected = true);
         unawaited(_recording.start());
         // Billing starts now, not when the request was accepted.
@@ -229,69 +416,105 @@ class _VideoCallViewState extends State<_VideoCallView> {
       _connecting = true;
       _error = '';
     });
-    _resetHandshake();
+    // Ringing the other side, and this side's connection (normally built
+    // already, offer included, while waiting for the lawyer) — together.
+    final started = context.read<ConsultationService>().startCall(widget.consultationId);
+    started.then((_) {}, onError: (_) {});
+    final peerReady = _takePrepared();
     try {
-      final service = context.read<ConsultationService>();
-      final call = await service.startCall(widget.consultationId);
+      final peer = await peerReady;
+      final call = await started;
       _callId = call.id;
+      _peer = peer;
 
-      _peer = await _createPeer();
-      final offer = await _peer!.createOffer();
-      await _peer!.setLocalDescription(offer);
-      await _pushSignal(offer: jsonEncode(offer.toMap()));
+      await Future.wait([
+        _pushSignal(offer: jsonEncode(_preOffer!.toMap())),
+        _flushQueuedCandidates(),
+      ]);
 
       _beginPolling();
     } on ApiException catch (e) {
+      _discard(peerReady);
       if (!mounted) return;
       setState(() {
         _connecting = false;
         _error = e.message;
       });
     } catch (_) {
+      _discard(peerReady);
       await _hangUp(failed: true);
       if (!mounted) return;
       setState(() => _error = 'Could not start the video call. Please try again.');
     }
   }
 
-  /// The lawyer answers.
-  Future<void> _answer({required bool accept}) async {
+  /// A connection built for a call that then failed to start.
+  void _discard(Future<RTCPeerConnection> peer) {
+    peer.then((p) {
+      if (!identical(p, _peer)) p.close();
+    }).catchError((_) {});
+  }
+
+  /// The lawyer answers. With [ring] — the call as read when it started
+  /// ringing — the answer is built while the server records the lawyer
+  /// answering, not after.
+  Future<void> _answer({required bool accept, CallState? ring}) async {
     setState(() {
       _connecting = true;
       _error = '';
     });
-    _resetHandshake();
+    final answered = context.read<ConsultationService>().answerCall(widget.consultationId, accept: accept);
+    answered.then((_) {}, onError: (_) {});
+    final peerReady = accept ? _takePrepared() : null;
     try {
-      final service = context.read<ConsultationService>();
-      final call = await service.answerCall(widget.consultationId, accept: accept);
-      _callId = call.id;
-
       if (!accept) {
+        final call = await answered;
+        _callId = call.id;
         if (mounted) setState(() => _connecting = false);
         return;
       }
 
-      _peer = await _createPeer();
+      final peer = await peerReady!;
+      _peer = peer;
+      String? answerSdp;
+      if (ring != null && ring.offer.isNotEmpty) {
+        answerSdp = await _answerOffer(peer, ring.offer);
+        await _addCandidates(peer, ring.candidates);
+        _since = ring.cursor;
+      }
+
+      final call = await answered;
+      _callId = call.id;
+      await Future.wait([
+        if (answerSdp != null) _pushSignal(answer: answerSdp),
+        _flushQueuedCandidates(),
+      ]);
+
       _beginPolling();
       // Read straight away rather than a second from now — the offer is
       // already waiting on the server.
       unawaited(_readSignals());
     } on ApiException catch (e) {
+      if (peerReady != null) _discard(peerReady);
       if (!mounted) return;
       setState(() {
         _connecting = false;
         _error = e.message;
       });
     } catch (_) {
+      if (peerReady != null) _discard(peerReady);
       await _hangUp(failed: true);
       if (!mounted) return;
       setState(() => _error = 'Could not answer the video call. Please try again.');
     }
   }
 
-  void _beginPolling() {
+  void _beginPolling({bool connecting = true}) {
     _signalPoll?.cancel();
-    _signalPoll = Timer.periodic(AppConfig.callSignalPoll, (_) => _readSignals());
+    _signalPoll = Timer.periodic(
+      connecting ? AppConfig.callSignalPollConnecting : AppConfig.callSignalPoll,
+      (_) => _readSignals(),
+    );
   }
 
   Future<void> _readSignals() async {
@@ -417,6 +640,9 @@ class _VideoCallViewState extends State<_VideoCallView> {
   }
 
   Future<void> _teardown() async {
+    final prepared = _prePeer;
+    _prePeer = null;
+    prepared?.then((p) => p.close(), onError: (_) {});
     await _peer?.close();
     _peer = null;
     await _recording.discard();
@@ -456,6 +682,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
     final track = _firstTrack(_localStream?.getVideoTracks());
     if (track == null) return;
     await Helper.switchCamera(track);
+    if (mounted) setState(() => _frontCamera = !_frontCamera);
   }
 
   @override
@@ -481,6 +708,8 @@ class _VideoCallViewState extends State<_VideoCallView> {
         ),
       );
     }
+
+    _armPip(session.status.isLive && _ready);
 
     if (!session.status.isLive) {
       return Scaffold(
@@ -508,6 +737,37 @@ class _VideoCallViewState extends State<_VideoCallView> {
       );
     }
 
+    _autoDrive(session, isAdvocate);
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _minimize();
+      },
+      child: ValueListenableBuilder<bool>(
+        valueListenable: Pip.active,
+        builder: (context, inPip, fullScreen) => inPip ? _pipView() : fullScreen!,
+        child: _fullScreen(session, isAdvocate, controller),
+      ),
+    );
+  }
+
+  /// The floating window: just the other person, nothing to tap.
+  Widget _pipView() {
+    return ColoredBox(
+      color: Colors.black,
+      child: _connected
+          ? RTCVideoView(
+              _remoteRenderer,
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            )
+          : const Center(
+              child: Text('Connecting…', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            ),
+    );
+  }
+
+  Widget _fullScreen(Consultation session, bool isAdvocate, SessionController controller) {
     return Scaffold(
       backgroundColor: AppColors.secondary,
       body: SafeArea(
@@ -589,16 +849,13 @@ class _VideoCallViewState extends State<_VideoCallView> {
               ),
               const SizedBox(height: 8),
               Text(
-                isAdvocate
-                    ? (session.call?.isRinging ?? false)
-                        ? 'is calling you on video.'
-                        : 'Waiting for the client to start the video call.'
-                    : 'Ready when you are. The session timer started when the lawyer accepted.',
+                // Both sides join on their own; nothing to wait on but the line.
+                (isAdvocate || _autoStarted) ? 'Connecting…' : 'Ready when you are.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white60, height: 1.5),
               ),
               const SizedBox(height: 26),
-              if (!isAdvocate)
+              if (!isAdvocate && !_autoStarted)
                 FilledButton.icon(
                   onPressed: _startCall,
                   icon: const Icon(Icons.videocam_rounded),
@@ -671,7 +928,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
             child: _cameraOn
                 ? RTCVideoView(
                     _localRenderer,
-                    mirror: true,
+                    mirror: _frontCamera,
                     objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                   )
                 : const Center(
@@ -696,7 +953,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => context.pop(),
+            onPressed: _minimize,
             icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
           ),
           Expanded(
@@ -716,7 +973,7 @@ class _VideoCallViewState extends State<_VideoCallView> {
                       ? 'Connecting…'
                       : session.isResume
                           ? 'Free resume · ${Fmt.clock(session.elapsed)}'
-                          : '${Fmt.clock(session.elapsed)} · ${Fmt.amount(session.runningCost)} so far',
+                          : Fmt.clock(session.elapsed),
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
@@ -768,8 +1025,8 @@ class _VideoCallViewState extends State<_VideoCallView> {
               if (!context.mounted) return;
               // Hanging up the video does not end the consultation — the
               // session is still live and still billing until someone ends it.
-              if (await confirmEndSession(context, session)) {
-                await controller.end();
+              if (await confirmEndSession(context, session) && context.mounted) {
+                await endSessionOrExplain(context, controller);
               }
             },
           ),

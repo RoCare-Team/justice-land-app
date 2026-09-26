@@ -9,3 +9,12 @@ build/
 ios/Pods/
 android/.gradle/
 android/local.properties
+
+# Firebase config (real credentials, kept out of git)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Local-only artifacts
+.claude/
+android/app/release/
+ios/.derived-data-log-*

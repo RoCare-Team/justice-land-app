@@ -112,7 +112,35 @@ class Consultation {
     this.talkedMinutes = 0,
     this.messagesCount = 0,
     this.lastMessage,
+    this.peerTyping = false,
+    this.peerReadAt,
+    this.peerOnline = false,
+    this.peerLastSeenAt,
+    this.supportsTyping = false,
+    this.supportsReadReceipts = false,
   });
+
+  // ── Chat presence, from the other side's point of view ─────────────────
+  // All optional: the server adds them to the session it returns, and until
+  // it does the chat simply shows none of this (see [supportsTyping] and
+  // [supportsReadReceipts]).
+
+  /// The other side is typing right now (`peerTyping`).
+  final bool peerTyping;
+
+  /// Everything the other side had been sent up to this moment they have
+  /// read (`peerReadAt`) — the blue ticks.
+  final DateTime? peerReadAt;
+
+  /// The other side is in the app right now, or when they last were
+  /// (`peer: { online, lastSeenAt }`).
+  final bool peerOnline;
+  final DateTime? peerLastSeenAt;
+
+  /// Whether the server knows about typing / read receipts at all — the app
+  /// only reports them once it does, so there is no traffic before then.
+  final bool supportsTyping;
+  final bool supportsReadReceipts;
 
   final String id;
   final String userId;
@@ -290,6 +318,12 @@ class Consultation {
         lastMessage: j['lastMessage'] is Map
             ? ChatMessage.fromJson(J.map(j['lastMessage']))
             : null,
+        peerTyping: J.flag(j['peerTyping']),
+        peerReadAt: J.date(j['peerReadAt']),
+        peerOnline: J.flag(J.map(j['peer'])['online']),
+        peerLastSeenAt: J.date(J.map(j['peer'])['lastSeenAt']),
+        supportsTyping: j.containsKey('peerTyping'),
+        supportsReadReceipts: j.containsKey('peerReadAt'),
       );
   }
 }
