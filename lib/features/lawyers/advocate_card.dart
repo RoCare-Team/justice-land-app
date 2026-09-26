@@ -285,20 +285,24 @@ class AdvocateCard extends StatelessWidget {
                 onTap: () => _book(context, ConsultationType.chat),
               ),
             ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _pricePill(
-                Icons.call_outlined, 'Call', callRate,
-                onTap: () => _book(context, ConsultationType.audio),
+            // Call and video only for a lawyer with a photograph — a client
+            // is not comfortable ringing someone they cannot see.
+            if (advocate.hasPhoto) ...[
+              const SizedBox(width: 6),
+              Expanded(
+                child: _pricePill(
+                  Icons.call_outlined, 'Call', callRate,
+                  onTap: () => _book(context, ConsultationType.audio),
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _pricePill(
-                Icons.videocam_outlined, 'Video', videoRate,
-                onTap: () => _book(context, ConsultationType.video),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _pricePill(
+                  Icons.videocam_outlined, 'Video', videoRate,
+                  onTap: () => _book(context, ConsultationType.video),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ],

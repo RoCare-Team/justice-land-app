@@ -37,6 +37,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:supportsPictureInPicture="true"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -61,13 +62,13 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Where a request/call push lands when the app has no channel of its
-             own registered yet (the very first notification, before Dart code
-             has run) — see push_service.dart's own channel of the same id,
-             which is what actually decides importance and sound after that. -->
+        <!-- Where a push lands when it names a channel this app has not created
+             (an old server id, or the very first notification before Dart code
+             has run) — see push_service.dart's channel of the same id, which
+             decides importance and sound once it exists. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="consultations" />
+            android:value="consultation_requests" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

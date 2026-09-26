@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The full-screen incoming call (flutter_callkit_incoming) in the app's own
+     colours rather than the plugin's WhatsApp-style ones. Same names as the
+     plugin's resources, so these replace them at build time. Kept in step
+     with AppColors.success / AppColors.danger (lib/core/theme/app_theme.dart),
+     which the in-app ringing sheet uses for the same two buttons. -->
+<resources>
+    <color name="accept">#22C55E</color>
+    <color name="accept_ripple">#86EFAC</color>
+    <color name="decline">#DC2626</color>
+    <color name="decline_ripple">#FCA5A5</color>
+    <color name="action_text">#FFFFFF</color>
+
+    <!-- The heads-up call banner (Answer / Decline) shown over an unlocked
+         phone uses androidx's call-style colours; the same two here. -->
+    <color name="call_notification_answer_color">#22C55E</color>
+    <color name="call_notification_decline_color">#DC2626</color>
+</resources>

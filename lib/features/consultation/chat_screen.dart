@@ -18,16 +18,20 @@ import 'session_shell.dart';
 /// re-read from the server on every poll rather than appended locally, so the
 /// thread on both phones is the one the server actually stored.
 class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key, required this.consultationId});
+  const ChatScreen({super.key, required this.consultationId, this.acceptOnOpen = false});
 
   final String consultationId;
+
+  /// Opened by the lawyer's Accept: the screen sends the accept itself, so it
+  /// shows at once instead of after the server answers.
+  final bool acceptOnOpen;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) =>
           SessionController(context.read<ConsultationService>(), consultationId)
-            ..start(),
+            ..start(acceptFirst: acceptOnOpen),
       child: const _ChatView(),
     );
   }
@@ -133,8 +137,8 @@ class _ChatViewState extends State<_ChatView> {
                 style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
                 onPressed: () async {
                   Navigator.of(context).pop(false);
-                  if (await confirmEndSession(context, session)) {
-                    await controller.end();
+                  if (await confirmEndSession(context, session) && context.mounted) {
+                    await endSessionOrExplain(context, controller);
                   }
                 },
                 child: const Text('End session'),
@@ -153,8 +157,8 @@ class _ChatViewState extends State<_ChatView> {
                 onPressed: controller.sending
                     ? null
                     : () async {
-                        if (await confirmEndSession(context, session)) {
-                          await controller.end();
+                        if (await confirmEndSession(context, session) && context.mounted) {
+                          await endSessionOrExplain(context, controller);
                         }
                       },
                 icon: const Icon(Icons.call_end_rounded, size: 18),

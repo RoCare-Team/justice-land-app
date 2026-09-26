@@ -30,7 +30,7 @@ class AppConfig {
   /// Shown on the More screen. Kept in step with `version:` in pubspec.yaml by
   /// hand — Flutter does not expose it to Dart without a plugin, and one plugin
   /// for one string on one screen is not a trade worth making.
-  static const String version = '1.0.0';
+  static const String version = '1.0.8';
   static const String supportEmail = 'support@justiceland.online';
 
   /// How often live screens re-read the server. These mirror the web client:
@@ -38,6 +38,17 @@ class AppConfig {
   static const Duration sessionPoll = Duration(seconds: 2);
   static const Duration inboxPoll = Duration(seconds: 4);
   static const Duration callSignalPoll = Duration(seconds: 1);
+
+  /// The same reads while a call is being put together — waiting for the
+  /// lawyer to accept, for the call to ring, for the handshake. Each of those
+  /// steps waits on the other phone's next read, so these decide how long
+  /// "Connecting…" lasts; they drop back to the rates above once connected.
+  static const Duration sessionPollConnecting = Duration(milliseconds: 400);
+  static const Duration callSignalPollConnecting = Duration(milliseconds: 250);
+
+  /// A live chat re-reads a little faster once the server reports typing,
+  /// so "typing…" and the blue ticks keep up with the conversation.
+  static const Duration chatPollTyping = Duration(milliseconds: 1200);
 
   /// Wallet top-up bounds, matching /api/wallet/order.
   static const int minTopUp = 50;

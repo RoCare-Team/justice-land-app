@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -57,6 +58,9 @@ class _LawyerShellState extends State<LawyerShell> {
     if (!identical(lawyer, _lawyer)) {
       _lawyer?.removeListener(_maybeRing);
       _lawyer = lawyer..addListener(_maybeRing);
+      // Opened from a notification on a cold start, the request to ring for
+      // can be queued before this shell exists to hear about it.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRing());
     }
   }
 
@@ -195,29 +199,59 @@ class _IncomingRequestSheetState extends State<IncomingRequestSheet> {
   Timer? _ring;
   int _rings = 0;
 
+  /// The same sounds the push notifications use (res/raw on Android): a call
+  /// rings on a loop, a chat request plays its short alert once.
+  final _player = AudioPlayer();
+
+  bool get _isCall => widget.session.isAudio || widget.session.isVideo;
+
   @override
   void initState() {
     super.initState();
+    _playSound();
     _buzz();
     // Rings like a phone for up to a minute, then waits quietly.
     _ring = Timer.periodic(const Duration(seconds: 3), (_) {
       _rings++;
       if (_rings > 20) {
         _ring?.cancel();
+        _player.stop();
         return;
       }
       _buzz();
     });
   }
 
+  Future<void> _playSound() async {
+    try {
+      // Played as a ringtone, not media: it follows the ring volume and
+      // takes audio focus only for as long as it rings.
+      await _player.setAudioContext(AudioContext(
+        android: const AudioContextAndroid(
+          contentType: AndroidContentType.sonification,
+          usageType: AndroidUsageType.notificationRingtone,
+          audioFocus: AndroidAudioFocus.gainTransient,
+        ),
+        iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
+      ));
+      await _player.setReleaseMode(_isCall ? ReleaseMode.loop : ReleaseMode.stop);
+      await _player.play(AssetSource(_isCall ? 'sounds/call_ring.mp3' : 'sounds/request_alert.wav'));
+    } catch (e) {
+      // No sound is no reason to miss the request — fall back to the beep.
+      debugPrint('IncomingRequestSheet: could not play ring: $e');
+      SystemSound.play(SystemSoundType.alert);
+    }
+  }
+
   void _buzz() {
     HapticFeedback.heavyImpact();
-    SystemSound.play(SystemSoundType.alert);
   }
 
   @override
   void dispose() {
     _ring?.cancel();
+    _player.stop();
+    _player.dispose();
     super.dispose();
   }
 
@@ -227,6 +261,10 @@ class _IncomingRequestSheetState extends State<IncomingRequestSheet> {
     final s = widget.session;
     // Gone from the inbox: the client cancelled, or it was answered elsewhere.
     final stillWaiting = lawyer.pending.any((c) => c.id == s.id);
+    if (!stillWaiting) {
+      _ring?.cancel();
+      _player.stop();
+    }
 
     return Container(
       decoration: const BoxDecoration(

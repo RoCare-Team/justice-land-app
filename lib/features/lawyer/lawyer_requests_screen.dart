@@ -10,27 +10,58 @@ import '../../models/consultation.dart';
 import '../../state/lawyer_controller.dart';
 import 'lawyer_widgets.dart';
 
-/// Consultation requests: what is waiting, what is running, what was answered.
+/// Consultation requests: what is waiting, what was missed, what was answered.
+/// A running session is not here — Home's "Active Consultations" carries it.
 class LawyerRequestsScreen extends StatefulWidget {
-  const LawyerRequestsScreen({super.key});
+  const LawyerRequestsScreen({super.key, this.initialTab});
+
+  /// `missed` opens on the Missed tab — the missed-call notification's tap.
+  final String? initialTab;
 
   @override
   State<LawyerRequestsScreen> createState() => _LawyerRequestsScreenState();
 }
 
 class _LawyerRequestsScreenState extends State<LawyerRequestsScreen> {
+  static const _missedTab = 1;
+
   int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _openRequestedTab();
+  }
+
+  @override
+  void didUpdateWidget(LawyerRequestsScreen old) {
+    super.didUpdateWidget(old);
+    // Already on this screen when the notification was tapped.
+    if (widget.initialTab != old.initialTab) _openRequestedTab();
+  }
+
+  void _openRequestedTab() {
+    if (widget.initialTab != 'missed') return;
+    _tab = _missedTab;
+    // The history is only re-read every 45 seconds; the call just missed
+    // should be in the list when the tab opens.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<LawyerController>().refreshHistory();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final lawyer = context.watch<LawyerController>();
     final pending = lawyer.pending;
-    final live = lawyer.live;
-    // Everything already answered one way or the other, newest first.
-    final answered = lawyer.history.where((c) => c.status.isOver).toList();
+    // Newest first. A request that was withdrawn or ran out before it was
+    // answered is a missed one; everything else over is answered.
+    final over = lawyer.history.where((c) => c.status.isOver);
+    final missed = over.where((c) => c.status == ConsultationStatus.cancelled).toList();
+    final answered = over.where((c) => c.status != ConsultationStatus.cancelled).toList();
 
-    final lists = [pending, live, answered];
-    final labels = ['Pending (${pending.length})', 'Live (${live.length})', 'Answered'];
+    final lists = [pending, missed, answered];
+    final labels = ['Pending (${pending.length})', 'Missed', 'Answered'];
     final shown = lists[_tab];
 
     return Scaffold(
@@ -62,14 +93,14 @@ class _LawyerRequestsScreenState extends State<LawyerRequestsScreen> {
                           padding: const EdgeInsets.all(16),
                           children: [
                             EmptyCard(
-                              icon: [Icons.notifications_none_rounded, Icons.forum_outlined, Icons.history_rounded][_tab],
-                              title: ['No one is waiting', 'Nothing running', 'Nothing answered yet'][_tab],
+                              icon: [Icons.notifications_none_rounded, Icons.phone_missed_rounded, Icons.history_rounded][_tab],
+                              title: ['No one is waiting', 'No missed requests', 'Nothing answered yet'][_tab],
                               message: [
                                 lawyer.available
                                     ? 'You are online. New requests appear here — and ring — as they arrive.'
                                     : 'You are offline, so clients cannot send requests.',
-                                'Accepted consultations show here while they run.',
-                                'Completed, declined and missed requests are kept here.',
+                                'Requests the client withdrew, or that ran out before you answered, show here.',
+                                'Completed and declined requests are kept here.',
                               ][_tab],
                             ),
                           ],
@@ -82,7 +113,6 @@ class _LawyerRequestsScreenState extends State<LawyerRequestsScreen> {
                             final s = shown[i];
                             void open() => context.push('/lawyer/client/${s.userId}');
                             if (_tab == 0) return RequestCard(session: s, onTap: open);
-                            if (_tab == 1) return LiveSessionCard(session: s);
                             return _AnsweredRow(session: s, onTap: open);
                           },
                         ),

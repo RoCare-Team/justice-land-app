@@ -21,23 +21,20 @@ IconData typeIcon(ConsultationType type) => switch (type) {
 
 /// Opens the live screen for a session on its own channel.
 void openSession(BuildContext context, Consultation session) {
-  final route = switch (session.type) {
-    ConsultationType.chat => '/consultation/${session.id}/chat',
-    ConsultationType.video => '/consultation/${session.id}/video',
-    ConsultationType.audio => '/consultation/${session.id}/audio',
-  };
-  context.push(route);
+  context.push(_sessionPath(session));
 }
 
-/// Accept, then go straight into the session — the client is already waiting.
+String _sessionPath(Consultation session) => switch (session.type) {
+      ConsultationType.chat => '/consultation/${session.id}/chat',
+      ConsultationType.video => '/consultation/${session.id}/video',
+      ConsultationType.audio => '/consultation/${session.id}/audio',
+    };
+
+/// Accept, and go straight into the session — the client is already waiting.
+/// The session screen opens at once and sends the accept itself
+/// (`?answer=1`), rather than the lawyer watching this screen wait on it.
 Future<void> acceptAndOpen(BuildContext context, Consultation session) async {
-  final lawyer = context.read<LawyerController>();
-  try {
-    final updated = await lawyer.accept(session.id);
-    if (context.mounted) openSession(context, updated);
-  } on ApiException catch (e) {
-    if (context.mounted) Toast.error(context, e.message);
-  }
+  await context.push('${_sessionPath(session)}?answer=1');
 }
 
 Future<void> declineRequest(BuildContext context, Consultation session) async {

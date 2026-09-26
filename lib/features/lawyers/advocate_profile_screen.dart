@@ -412,7 +412,11 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
           // is charged at the platform's, so there is no such thing as a
           // channel they "do not offer" — hiding one would make them look
           // unreachable when the website would happily book it.
+          //
+          // Except call and video for a lawyer with no photograph: those are
+          // not offered to clients until the lawyer puts one up.
           for (final c in kConsultationChannels)
+            if (advocate.hasPhoto || c.key == 'chat')
             DetailRow(
               icon: switch (c.key) {
                 'audio' => Icons.call_outlined,
@@ -641,30 +645,33 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                   ),
                 ),
               ),
-            _actionButton(
-                icon: Icons.call_outlined,
-                label: 'Call',
-                highlight: true,
-                onTap: () => _requireSignIn(
-                  () => BookingSheet.open(
-                    context,
-                    advocate: advocate,
-                    type: ConsultationType.audio,
+            // Call and video only for a lawyer with a photograph.
+            if (advocate.hasPhoto) ...[
+              _actionButton(
+                  icon: Icons.call_outlined,
+                  label: 'Call',
+                  highlight: true,
+                  onTap: () => _requireSignIn(
+                    () => BookingSheet.open(
+                      context,
+                      advocate: advocate,
+                      type: ConsultationType.audio,
+                    ),
                   ),
                 ),
-              ),
-            _actionButton(
-                icon: Icons.videocam_outlined,
-                label: 'Video',
-                highlight: true,
-                onTap: () => _requireSignIn(
-                  () => BookingSheet.open(
-                    context,
-                    advocate: advocate,
-                    type: ConsultationType.video,
+              _actionButton(
+                  icon: Icons.videocam_outlined,
+                  label: 'Video',
+                  highlight: true,
+                  onTap: () => _requireSignIn(
+                    () => BookingSheet.open(
+                      context,
+                      advocate: advocate,
+                      type: ConsultationType.video,
+                    ),
                   ),
                 ),
-              ),
+            ],
           ],
         ),
       ),
