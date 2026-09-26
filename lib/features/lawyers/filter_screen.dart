@@ -78,110 +78,220 @@ class _FilterScreenState extends State<FilterScreen> {
         () => _draft = _draft.copyWith(service: value, subService: ''),
       );
 
+  AdvocateQuery get _cleared => AdvocateQuery(query: _draft.query, sort: _draft.sort);
+
+  void _set(AdvocateQuery Function(AdvocateQuery) change) => setState(() => _draft = change(_draft));
+
   @override
   Widget build(BuildContext context) {
+    final active = _draft.activeCount;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Find Lawyer'),
-        actions: [
-          if (_draft.activeCount > 0)
-            TextButton(
-              onPressed: () => setState(
-                // The typed search survives a reset: it is what the visitor
-                // came looking for, not one of the filters they are clearing.
-                () => _draft = AdvocateQuery(query: _draft.query, sort: _draft.sort),
-              ),
-              child: const Text('Clear all'),
-            ),
-        ],
-      ),
+      backgroundColor: AppColors.muted,
+      appBar: AppBar(title: const Text('Filters')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
         children: [
-          _PickerRow(
-            label: 'Practice Area',
-            value: _draft.service,
-            loading: _loading,
-            options: _services,
-            onPick: _setService,
-          ),
-          _PickerRow(
-            label: 'City',
-            value: _draft.city,
-            loading: _loading,
-            options: _cities,
-            onPick: (v) => setState(() => _draft = _draft.copyWith(city: v)),
-          ),
-          _PickerRow(
-            label: 'Court',
-            value: _draft.court,
-            loading: _loading,
-            options: _courts,
-            onPick: (v) => setState(() => _draft = _draft.copyWith(court: v)),
-          ),
-          _PickerRow(
-            label: 'Language',
-            value: _draft.language,
-            loading: _loading,
-            options: _languages,
-            onPick: (v) => setState(() => _draft = _draft.copyWith(language: v)),
-          ),
-
-          const SizedBox(height: 18),
-          _StepRow(
-            label: 'Experience',
-            anyLabel: 'Any',
-            value: _draft.minExperience,
-            steps: _experienceSteps,
-            format: (v) => '$v+ yrs',
-            onPick: (v) => setState(() => _draft = _draft.copyWith(minExperience: v)),
-          ),
-          const SizedBox(height: 18),
-          _StepRow(
-            label: 'Fee / Minute',
-            anyLabel: 'Any',
-            value: _draft.maxFee,
-            steps: _feeSteps,
-            format: (v) => 'Up to ${Fmt.money(v)}',
-            onPick: (v) => setState(() => _draft = _draft.copyWith(maxFee: v)),
-          ),
-
-          const SizedBox(height: 18),
-          _Toggle(
-            label: 'Online Now Only',
-            note: 'Lawyers who have their availability switched on right now.',
-            value: _draft.availability == 'online',
-            onChanged: (on) => setState(
-              () => _draft = _draft.copyWith(availability: on ? 'online' : ''),
+          // The four list filters as a 2 × 2 grid: each is one tap to a list,
+          // so they read better as tiles seen all at once than as a column of
+          // rows pushing the chips below the fold.
+          _Section(
+            title: 'Find by',
+            child: Column(
+              children: [
+                _TileRow(
+                  left: _PickerTile(
+                    icon: Icons.gavel_rounded,
+                    label: 'Practice Area',
+                    value: _draft.service,
+                    loading: _loading,
+                    options: _services,
+                    onPick: _setService,
+                  ),
+                  right: _PickerTile(
+                    icon: Icons.location_city_rounded,
+                    label: 'City',
+                    value: _draft.city,
+                    loading: _loading,
+                    options: _cities,
+                    onPick: (v) => _set((q) => q.copyWith(city: v)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _TileRow(
+                  left: _PickerTile(
+                    icon: Icons.account_balance_rounded,
+                    label: 'Court',
+                    value: _draft.court,
+                    loading: _loading,
+                    options: _courts,
+                    onPick: (v) => _set((q) => q.copyWith(court: v)),
+                  ),
+                  right: _PickerTile(
+                    icon: Icons.translate_rounded,
+                    label: 'Language',
+                    value: _draft.language,
+                    loading: _loading,
+                    options: _languages,
+                    onPick: (v) => _set((q) => q.copyWith(language: v)),
+                  ),
+                ),
+              ],
             ),
           ),
-          Divider(height: 24, color: AppColors.border),
-          _Toggle(
-            label: 'Verified Lawyers Only',
-            // Said plainly, because switching it on can legitimately return
-            // nobody — verification is done by hand by an administrator, not
-            // granted on registration.
-            note: 'Only lawyers an administrator has verified.',
-            value: _draft.verifiedOnly,
-            onChanged: (on) => setState(() => _draft = _draft.copyWith(verifiedOnly: on)),
+          const SizedBox(height: 12),
+          _Section(
+            title: 'Experience',
+            icon: Icons.workspace_premium_outlined,
+            child: _StepRow(
+              anyLabel: 'Any',
+              value: _draft.minExperience,
+              steps: _experienceSteps,
+              format: (v) => '$v+ yrs',
+              onPick: (v) => _set((q) => q.copyWith(minExperience: v)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _Section(
+            title: 'Fee per minute',
+            icon: Icons.currency_rupee_rounded,
+            child: _StepRow(
+              anyLabel: 'Any',
+              value: _draft.maxFee,
+              steps: _feeSteps,
+              format: (v) => 'Up to ${Fmt.money(v)}',
+              onPick: (v) => _set((q) => q.copyWith(maxFee: v)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _Section(
+            child: Column(
+              children: [
+                _Toggle(
+                  icon: Icons.wifi_tethering_rounded,
+                  iconColor: AppColors.success,
+                  label: 'Online now',
+                  note: 'Lawyers available to talk right now.',
+                  value: _draft.availability == 'online',
+                  onChanged: (on) => _set((q) => q.copyWith(availability: on ? 'online' : '')),
+                ),
+                Divider(height: 22, color: AppColors.border),
+                _Toggle(
+                  icon: Icons.verified_rounded,
+                  iconColor: AppColors.info,
+                  label: 'Verified lawyers only',
+                  // Said plainly, because switching it on can legitimately
+                  // return nobody — verification is done by hand by an
+                  // administrator, not granted on registration.
+                  note: 'Only lawyers an administrator has verified.',
+                  value: _draft.verifiedOnly,
+                  onChanged: (on) => _set((q) => q.copyWith(verifiedOnly: on)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-        child: PrimaryButton(
-          label: 'Show Results',
-          onPressed: () => Navigator.pop(context, _draft.copyWith(page: 1)),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: Padding(
+          // The shell's tab bar floats over this screen, and its raised Top
+          // Lawyers button sits higher still — clear both, not just the inset.
+          padding: EdgeInsets.fromLTRB(16, 10, 16, bottomGutter(context, 34)),
+          child: Row(
+            children: [
+              // Reset sits beside the action rather than up in the app bar,
+              // where it was easy to miss. The typed search survives it: it is
+              // what the visitor came looking for, not one of the filters.
+              OutlinedButton(
+                onPressed: active == 0 ? null : () => setState(() => _draft = _cleared),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 52),
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                ),
+                child: const Text('Reset'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: PrimaryButton(
+                  label: active == 0 ? 'Show Results' : 'Show Results ($active)',
+                  onPressed: () => Navigator.pop(context, _draft.copyWith(page: 1)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// One filter that opens a list. Shows "All" when nothing is chosen, which is
-/// the truth about an unset filter rather than an empty-looking control.
-class _PickerRow extends StatelessWidget {
-  const _PickerRow({
+/// A white card grouping one part of the filter set, with an optional heading.
+class _Section extends StatelessWidget {
+  const _Section({this.title, this.icon, required this.child});
+
+  final String? title;
+  final IconData? icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null) ...[
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                ],
+                Text(title!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TileRow extends StatelessWidget {
+  const _TileRow({required this.left, required this.right});
+
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: left),
+        const SizedBox(width: 10),
+        Expanded(child: right),
+      ],
+    );
+  }
+}
+
+/// One filter that opens a list, as a tile in the 2 × 2 grid. Shows "All" when
+/// nothing is chosen, which is the truth about an unset filter rather than an
+/// empty-looking control; a chosen one is highlighted and its ✕ clears it
+/// without opening the list.
+class _PickerTile extends StatelessWidget {
+  const _PickerTile({
+    required this.icon,
     required this.label,
     required this.value,
     required this.options,
@@ -189,6 +299,7 @@ class _PickerRow extends StatelessWidget {
     required this.loading,
   });
 
+  final IconData icon;
   final String label;
   final String value;
   final List<String> options;
@@ -197,60 +308,107 @@ class _PickerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: loading ? null : () => _open(context),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-            ),
-            if (loading)
-              SizedBox(
-                height: 14,
-                width: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.inkFaint,
-                ),
-              )
-            else
-              Flexible(
-                child: Text(
-                  value.isEmpty ? 'All' : value,
-                  textAlign: TextAlign.right,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: value.isEmpty ? FontWeight.w400 : FontWeight.w600,
-                    color: value.isEmpty ? AppColors.inkFaint : AppColors.primary,
+    final chosen = value.isNotEmpty;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(
+        color: chosen ? AppColors.primary.withValues(alpha: 0.45) : AppColors.border,
+      ),
+    );
+    return Material(
+      color: chosen ? AppColors.primary.withValues(alpha: 0.06) : AppColors.muted,
+      shape: shape,
+      child: InkWell(
+        customBorder: shape,
+        onTap: loading ? null : () => _open(context),
+        child: SizedBox(
+          height: 72,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(icon, size: 15, color: AppColors.inkMuted),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (loading)
+                        SizedBox(
+                          height: 14,
+                          width: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.inkFaint),
+                        )
+                      else
+                        Text(
+                          chosen ? _summary(value) : 'All',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                            color: chosen ? AppColors.primary : AppColors.ink,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.inkFaint),
-          ],
+                if (chosen)
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Clear $label',
+                    icon: Icon(Icons.close_rounded, size: 18, color: AppColors.inkMuted),
+                    onPressed: () => onPick(''),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.inkFaint),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  static String _summary(String value) {
+    final values = AdvocateQuery.valuesOf(value);
+    return values.length < 2 ? values.first : '${values.first} +${values.length - 1}';
   }
 
   Future<void> _open(BuildContext context) async {
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      // Over the tab bar, not under it — its raised Top Lawyers button would
+      // otherwise sit on top of Apply.
+      useRootNavigator: true,
       builder: (_) => _OptionSheet(title: label, value: value, options: options),
     );
     if (picked != null) onPick(picked);
   }
 }
 
-/// The options for one filter, searchable once there are enough of them to be
-/// worth scrolling — the city list runs past a hundred.
+/// The options for one filter, any number of them ticked — searchable once
+/// there are enough to be worth scrolling (the city list runs past a hundred).
+/// Nothing changes until Apply, so ticking through a long list does not
+/// re-run anything; "All" clears the ticks.
 class _OptionSheet extends StatefulWidget {
   const _OptionSheet({
     required this.title,
@@ -259,6 +417,8 @@ class _OptionSheet extends StatefulWidget {
   });
 
   final String title;
+
+  /// The current choice, several values joined as [AdvocateQuery] keeps them.
   final String value;
   final List<String> options;
 
@@ -268,6 +428,7 @@ class _OptionSheet extends StatefulWidget {
 
 class _OptionSheetState extends State<_OptionSheet> {
   String _search = '';
+  late final Set<String> _picked = AdvocateQuery.valuesOf(widget.value).toSet();
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +440,7 @@ class _OptionSheetState extends State<_OptionSheet> {
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
+      initialChildSize: 0.75,
       maxChildSize: 0.92,
       builder: (context, scroll) => Column(
         children: [
@@ -293,7 +454,7 @@ class _OptionSheetState extends State<_OptionSheet> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 14, 12, 4),
             child: Row(
               children: [
                 Expanded(
@@ -302,11 +463,26 @@ class _OptionSheetState extends State<_OptionSheet> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                if (_picked.isNotEmpty)
+                  TextButton(
+                    onPressed: () => setState(_picked.clear),
+                    child: const Text('Clear'),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Select one or more',
+                style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted),
+              ),
             ),
           ),
           if (searchable)
@@ -324,22 +500,39 @@ class _OptionSheetState extends State<_OptionSheet> {
           Expanded(
             child: ListView.builder(
               controller: scroll,
-              padding: const EdgeInsets.only(bottom: 24),
-              // One extra row at the top: "All", which is how a filter is
-              // removed. Without it the only way out of a choice is Clear all.
+              padding: const EdgeInsets.only(bottom: 12),
+              // "All" first: how a filter is removed without unticking each.
               itemCount: rows.length + 1,
               itemBuilder: (_, i) {
                 if (i == 0) {
-                  return _tile(context, label: 'All', value: '', selected: widget.value.isEmpty);
+                  return _tile(
+                    label: 'All',
+                    selected: _picked.isEmpty,
+                    onTap: () => setState(_picked.clear),
+                  );
                 }
                 final option = rows[i - 1];
                 return _tile(
-                  context,
                   label: option,
-                  value: option,
-                  selected: option == widget.value,
+                  selected: _picked.contains(option),
+                  onTap: () => setState(() {
+                    if (!_picked.remove(option)) _picked.add(option);
+                  }),
                 );
               },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+            child: PrimaryButton(
+              label: _picked.isEmpty ? 'Show all' : 'Apply (${_picked.length})',
+              // Kept in the list's own order, so the pill and the tile read
+              // the same way however the ticks were made.
+              onPressed: () => Navigator.pop(
+                context,
+                AdvocateQuery.join(widget.options.where(_picked.contains)),
+              ),
             ),
           ),
         ],
@@ -347,25 +540,25 @@ class _OptionSheetState extends State<_OptionSheet> {
     );
   }
 
-  Widget _tile(
-    BuildContext context, {
+  Widget _tile({
     required String label,
-    required String value,
     required bool selected,
+    required VoidCallback onTap,
   }) {
-    return ListTile(
+    return CheckboxListTile(
+      value: selected,
+      onChanged: (_) => onTap(),
+      controlAffinity: ListTileControlAffinity.leading,
+      dense: true,
+      activeColor: AppColors.primary,
       title: Text(
         label,
         style: TextStyle(
           fontSize: 14.5,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           color: selected ? AppColors.primary : AppColors.ink,
         ),
       ),
-      trailing: selected
-          ? const Icon(Icons.check_rounded, size: 20, color: AppColors.primary)
-          : null,
-      onTap: () => Navigator.pop(context, value),
     );
   }
 }
@@ -373,7 +566,6 @@ class _OptionSheetState extends State<_OptionSheet> {
 /// A filter chosen from a handful of steps, laid out as chips.
 class _StepRow extends StatelessWidget {
   const _StepRow({
-    required this.label,
     required this.anyLabel,
     required this.value,
     required this.steps,
@@ -381,7 +573,6 @@ class _StepRow extends StatelessWidget {
     required this.onPick,
   });
 
-  final String label;
   final String anyLabel;
   final int value;
   final List<int> steps;
@@ -390,36 +581,34 @@ class _StepRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: [
-        Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final step in steps)
-              SelectableChip(
-                label: step == 0 ? anyLabel : format(step),
-                selected: value == step,
-                onTap: () => onPick(step),
-              ),
-          ],
-        ),
+        for (final step in steps)
+          SelectableChip(
+            label: step == 0 ? anyLabel : format(step),
+            selected: value == step,
+            onTap: () => onPick(step),
+          ),
       ],
     );
   }
 }
 
+/// An on/off filter. The whole row toggles it, not just the switch.
 class _Toggle extends StatelessWidget {
   const _Toggle({
+    required this.icon,
+    required this.iconColor,
     required this.label,
     required this.note,
     required this.value,
     required this.onChanged,
   });
 
+  final IconData icon;
+  final Color iconColor;
   final String label;
   final String note;
   final bool value;
@@ -427,20 +616,33 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              Text(note, style: TextStyle(fontSize: 12.5, color: AppColors.inkFaint)),
-            ],
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Row(
+        children: [
+          Container(
+            height: 38,
+            width: 38,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 20, color: iconColor),
           ),
-        ),
-        Switch.adaptive(value: value, onChanged: onChanged),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(note, style: TextStyle(fontSize: 12.5, color: AppColors.inkFaint)),
+              ],
+            ),
+          ),
+          Switch.adaptive(value: value, onChanged: onChanged),
+        ],
+      ),
     );
   }
 }

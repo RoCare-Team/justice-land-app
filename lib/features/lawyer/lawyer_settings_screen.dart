@@ -34,7 +34,7 @@ Future<void> confirmLawyerLogout(BuildContext context) async {
   );
   if (yes != true || !context.mounted) return;
   await context.read<AuthController>().signOut();
-  if (context.mounted) context.go('/advocate/login');
+  if (context.mounted) context.go('/role');
 }
 
 class LawyerSettingsScreen extends StatelessWidget {
@@ -134,7 +134,7 @@ class LawyerSettingsScreen extends StatelessWidget {
       await context.read<DashboardService>().deleteAccount();
       if (!context.mounted) return;
       await context.read<AuthController>().signOut();
-      if (context.mounted) context.go('/');
+      if (context.mounted) context.go('/role');
     } on ApiException catch (e) {
       if (context.mounted) Toast.error(context, e.message);
     }

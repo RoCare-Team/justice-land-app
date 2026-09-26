@@ -229,9 +229,10 @@ class AdvocateCard extends StatelessWidget {
         // The plan badge sits on this line rather than beside the name: the
         // name already shares its row with the verified pill and the heart,
         // and on a 320-wide phone a third thing there pushes the lot off the
-        // card. Here it has a whole line to itself and the practice area
-        // ellipsises around it.
+        // card. Here it has a whole line to itself and the practice areas
+        // wrap to a second line beside it.
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (advocate.paidPlanId.isNotEmpty) ...[
               PlanTierBadge(advocate: advocate, compact: true),
@@ -240,7 +241,7 @@ class AdvocateCard extends StatelessWidget {
             Flexible(
               child: Text(
                 _speciality,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12.5,
@@ -325,12 +326,14 @@ class AdvocateCard extends StatelessWidget {
     BookingSheet.open(context, advocate: advocate, type: type);
   }
 
-  /// The lawyer's own tagline when they wrote one, otherwise their practice
-  /// areas. Never invented — a lawyer with neither is simply "Advocate".
+  /// What the lawyer handles: their practice areas, or the matters they take
+  /// when they listed no area. The free-text tagline is left to the profile —
+  /// on a card it crowded out what a client scans the list for. Never
+  /// invented — a lawyer with neither is simply "Advocate".
   String get _speciality {
-    if (advocate.tagline.trim().isNotEmpty) return advocate.tagline.trim();
-    if (advocate.specializations.isEmpty) return 'Advocate';
-    return advocate.specializations.take(2).join(' & ');
+    if (advocate.specializations.isNotEmpty) return advocate.specializations.join(', ');
+    if (advocate.subSpecializations.isNotEmpty) return advocate.subSpecializations.join(', ');
+    return 'Advocate';
   }
 
   /// Distance when the server worked one out, otherwise the city.

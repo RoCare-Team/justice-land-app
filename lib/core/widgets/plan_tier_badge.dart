@@ -37,6 +37,15 @@ class PlanTierBadge extends StatelessWidget {
     final gold = tier == 'premium';
     final ink = gold ? _goldInk : _silverInk;
 
+    // Directory cards show just the medal: the name and specialisation beside
+    // it need the room, and 🥇 / 🥈 read as the ranking without a word.
+    if (compact) {
+      return Semantics(
+        label: gold ? 'Gold member' : 'Silver member',
+        child: Text(gold ? '🥇' : '🥈', style: const TextStyle(fontSize: 16, height: 1.1)),
+      );
+    }
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 9, vertical: compact ? 2 : 4),
       decoration: BoxDecoration(

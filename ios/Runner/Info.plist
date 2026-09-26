@@ -29,7 +29,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Justiceland uses your camera for video consultations with your lawyer, and to attach photos of documents.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Justiceland uses your microphone for audio and video consultations with your lawyer.</string>
+	<string>Justiceland uses your microphone for audio and video consultations with your lawyer, and to search for lawyers by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Justiceland turns what you say into a search when you tap the microphone on Find Lawyers.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Justiceland needs access to your photos so you can set a profile picture and attach documents.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

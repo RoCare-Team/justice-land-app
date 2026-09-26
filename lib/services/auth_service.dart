@@ -213,4 +213,13 @@ class AuthService {
       await _api.clearSession();
     }
   }
+
+  /// Permanently deletes the signed-in client's account — the client twin of
+  /// the lawyer's DELETE /api/dashboard/profile. The session cookie says whose
+  /// account it is: no id is sent and no key is compiled into the app, so this
+  /// can only ever delete the caller's own account (App Store 5.1.1(v)).
+  Future<void> deleteAccount() async {
+    await _api.delete(Endpoints.userMe);
+    await _api.clearSession();
+  }
 }

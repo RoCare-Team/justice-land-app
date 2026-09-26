@@ -436,10 +436,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _searchField() {
+    // Not typed into here: a tap opens Find Lawyers with its own search box
+    // focused, where suggestions and results appear as you type. Typing here
+    // showed nothing until the keyboard's search key was pressed, which read
+    // as a search box that did not work.
     return TextField(
       controller: _matter,
-      textInputAction: TextInputAction.search,
-      onSubmitted: (_) => _findLawyers(),
+      readOnly: true,
+      showCursor: false,
+      onTap: _openSearch,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         hintText: 'Search lawyers or legal issues...',
@@ -469,14 +474,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _findLawyers() {
-    final matter = _matter.text.trim();
+  void _openSearch() {
     final city = context.read<LocationController>().city;
-    final parts = <String>[
-      if (matter.isNotEmpty) 'q=${Uri.encodeQueryComponent(matter)}',
-      if (city.isNotEmpty) 'city=${Uri.encodeQueryComponent(city)}',
-    ];
-    context.go(parts.isEmpty ? '/lawyers' : '/lawyers?${parts.join('&')}');
+    context.go(city.isEmpty
+        ? '/lawyers?focus=1'
+        : '/lawyers?focus=1&city=${Uri.encodeQueryComponent(city)}');
   }
 
   /// The practice areas, as one scrolling strip of small icons.

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/config/consultation_slots.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/plan_tier_badge.dart';
 import '../../core/widgets/verified_badge.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/common.dart';
@@ -16,7 +15,6 @@ import '../../models/consultation.dart';
 import '../../services/advocate_service.dart';
 import '../../state/auth_controller.dart';
 import 'booking_sheet.dart';
-import 'enquiry_sheet.dart';
 import 'save_lawyer_button.dart';
 
 /// A lawyer's public profile, with the live consultation bar pinned at the
@@ -243,11 +241,25 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Avatar(
-                name: advocate.name,
-                photo: advocate.photo,
-                size: 74,
-                online: _online,
+              // The status sits under the photo it describes rather than on
+              // a line of its own below the whole header.
+              Column(
+                children: [
+                  Avatar(
+                    name: advocate.name,
+                    photo: advocate.photo,
+                    size: 74,
+                    online: _online,
+                  ),
+                  if (_online != null) ...[
+                    const SizedBox(height: 8),
+                    StatusChip(
+                      label: _online! ? 'Online' : 'Offline',
+                      tone: _online! ? ChipTone.success : ChipTone.neutral,
+                      icon: Icons.circle,
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -267,17 +279,11 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                         SaveLawyerButton(advocate: advocate, size: 22),
                       ],
                     ),
-                    if (advocate.verified || advocate.paidPlanId.isNotEmpty) ...[
+                    // No Gold / Silver badge on the profile — the directory
+                    // card's medal is where the plan shows.
+                    if (advocate.verified) ...[
                       const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          if (advocate.verified) const VerifiedBadge(),
-                          if (advocate.paidPlanId.isNotEmpty)
-                            PlanTierBadge(advocate: advocate),
-                        ],
-                      ),
+                      const VerifiedBadge(),
                     ],
                     if (advocate.tagline.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -326,14 +332,6 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
               ),
             ],
           ),
-          if (_online != null) ...[
-            const SizedBox(height: 14),
-            StatusChip(
-              label: _online! ? 'Online now' : 'Currently offline',
-              tone: _online! ? ChipTone.success : ChipTone.neutral,
-              icon: Icons.circle,
-            ),
-          ],
         ],
       ),
     );
@@ -354,7 +352,10 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 2.2,
+      // Without an explicit padding a GridView takes the MediaQuery's, which
+      // here is the status bar — a blank band above the tiles.
+      padding: EdgeInsets.zero,
+      childAspectRatio: 2.5,
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
       children: [
@@ -627,15 +628,9 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
         child: Row(
           children: [
             _actionButton(
-              icon: Icons.mail_outline_rounded,
-              label: 'Enquire',
-              onTap: () => _requireSignIn(
-                () => EnquirySheet.open(context, advocate: advocate),
-              ),
-            ),
-            _actionButton(
                 icon: Icons.chat_bubble_outline_rounded,
                 label: 'Chat',
+                rate: advocate.chatRate,
                 highlight: true,
                 onTap: () => _requireSignIn(
                   () => BookingSheet.open(
@@ -650,6 +645,7 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
               _actionButton(
                   icon: Icons.call_outlined,
                   label: 'Call',
+                  rate: advocate.audioRate,
                   highlight: true,
                   onTap: () => _requireSignIn(
                     () => BookingSheet.open(
@@ -662,6 +658,7 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
               _actionButton(
                   icon: Icons.videocam_outlined,
                   label: 'Video',
+                  rate: advocate.videoRate,
                   highlight: true,
                   onTap: () => _requireSignIn(
                     () => BookingSheet.open(
@@ -678,10 +675,15 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
     );
   }
 
+  /// One way to reach the lawyer, with what a minute of it costs under the
+  /// name — the same ₹/min the directory card quotes, so the price does not
+  /// change between the list and the profile. A channel with no rate set
+  /// shows just its name rather than ₹0, which would read as "free".
   Widget _actionButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    int rate = 0,
     bool highlight = false,
   }) {
     return Expanded(
@@ -702,20 +704,45 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    icon,
-                    size: 19,
-                    color: highlight ? Colors.white : AppColors.primary,
+                  // Icon and name on one line, the price under them.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 18,
+                        color: highlight ? Colors.white : AppColors.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: highlight ? Colors.white : AppColors.primary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: highlight ? Colors.white : AppColors.primary,
+                  if (rate > 0) ...[
+                    const SizedBox(height: 3),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: Fmt.money(rate),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                          const TextSpan(text: '/min', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                      style: TextStyle(
+                        color: highlight
+                            ? AppColors.accent
+                            : AppColors.primary,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

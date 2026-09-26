@@ -83,6 +83,8 @@ dependencies:
   audioplayers_android: 5.2.1
   flutter_callkit_incoming: ^3.1.6
   android_intent_plus: ^6.1.0
+  # Voice search on Find Lawyers: the phone's own speech recognizer.
+  speech_to_text: ^7.4.0
 
 dev_dependencies:
   flutter_test:
