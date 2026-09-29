@@ -192,6 +192,7 @@ class PushService {
     if (_attached) return;
     _attached = true;
     _auth = auth;
+    auth.beforeSignOut = _signingOut;
     try {
       if (Firebase.apps.isEmpty) return;
 
@@ -495,11 +496,39 @@ class PushService {
 
   Future<void> _register(String token) async {
     if (token == _registeredToken) return;
+    var saved = await _quietly('register device', () => _dashboard.registerDevice(token));
+    // A lawyer's phone goes on the older lawyers-only list as well, which is
+    // what call and request pushes were sent from — so it keeps ringing
+    // whichever list the server reads.
+    if (_role == 'lawyer') {
+      saved |= await _quietly('register lawyer token', () => _dashboard.registerLawyerToken(token));
+    }
+    if (saved) _registeredToken = token;
+  }
+
+  /// Just before sign-out, while the session still says whose phone this is:
+  /// the lawyers-only route will not delete a token without it, and a phone
+  /// left on that list would go on ringing for the account it signed out of.
+  Future<void> _signingOut() async {
+    final token = _registeredToken;
+    if (token == null) return;
+    _registeredToken = null;
+    await Future.wait([
+      _quietly('unregister device', () => _dashboard.unregisterDevice(token)),
+      if (_role == 'lawyer')
+        _quietly('unregister lawyer token', () => _dashboard.unregisterLawyerToken(token)),
+    ]);
+  }
+
+  /// Runs [action], logging a failure rather than throwing it — none of this
+  /// is something the user is waiting on.
+  Future<bool> _quietly(String what, Future<void> Function() action) async {
     try {
-      await _dashboard.registerDevice(token);
-      _registeredToken = token;
+      await action();
+      return true;
     } catch (e) {
-      debugPrint('PushService: could not register token: $e');
+      debugPrint('PushService: could not $what: $e');
+      return false;
     }
   }
 

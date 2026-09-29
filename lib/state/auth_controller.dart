@@ -204,7 +204,17 @@ class AuthController extends ChangeNotifier {
 
   // ── Session upkeep ───────────────────────────────────────────────────────
 
+  /// Runs just before the session is dropped, while requests are still
+  /// signed in — PushService takes this phone's push token off the account
+  /// with it. Given a few seconds at most; signing out never waits longer.
+  Future<void> Function()? beforeSignOut;
+
   Future<void> signOut() async {
+    try {
+      await beforeSignOut?.call().timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Signing out goes ahead regardless.
+    }
     await setLawyerOnboardingPending(false);
     await _auth.logout();
     _user = null;

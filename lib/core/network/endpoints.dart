@@ -257,6 +257,12 @@ class Endpoints {
   /// still accepts from older installs.
   static const String notificationDevices = '/api/notifications/devices';
 
+  /// POST / DELETE { token } — the lawyers-only route the server sent call and
+  /// request pushes from before [notificationDevices]. A lawyer's phone is
+  /// still registered here too, so it rings whichever the server reads.
+  /// Needs the lawyer's session, including to delete.
+  static const String legacyFcmToken = '/api/dashboard/fcm-token';
+
   // ── Membership plans (lawyers) ───────────────────────────────────────────
   //
   // What a plan buys is how much of a practice may be listed and where it

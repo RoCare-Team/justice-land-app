@@ -119,6 +119,20 @@ class ApiClient {
     final status = res.statusCode ?? 0;
     final data = res.data;
 
+    // A route the server does not have yet comes back as the website's own
+    // page, with a 200. Taking that as success is how a feature can look
+    // fine in the app while nothing reaches the server — so it is a 404 here.
+    final type = res.headers.value(Headers.contentTypeHeader) ?? '';
+    if (status >= 200 && status < 300 && type.contains('text/html')) {
+      debugPrint('ApiClient: ${res.requestOptions.method} ${res.requestOptions.path} → '
+          '$status HTML page, not an API answer: the route is not on this server');
+      throw ApiException(
+        message: 'This is not available yet. Please update the app or try again later.',
+        statusCode: 404,
+        code: 'not-found',
+      );
+    }
+
     if (status >= 200 && status < 300) return data;
 
     // What the server said, for whoever is reading the device log — the

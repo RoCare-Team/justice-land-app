@@ -184,6 +184,14 @@ class DashboardService {
   /// Works without a session: the token alone identifies the phone.
   Future<void> unregisterDevice(String token) =>
       _api.delete(Endpoints.notificationDevices, body: {'token': token});
+
+  /// The same, on the older lawyers-only route ([Endpoints.legacyFcmToken]).
+  /// Signed-in lawyers only — which is why sign-out removes it first.
+  Future<void> registerLawyerToken(String token) =>
+      _api.post(Endpoints.legacyFcmToken, body: {'token': token});
+
+  Future<void> unregisterLawyerToken(String token) =>
+      _api.delete(Endpoints.legacyFcmToken, body: {'token': token});
 }
 
 /// A saved payout account as the server shows it: never the full number.
