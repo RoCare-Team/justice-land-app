@@ -27,10 +27,11 @@ class AppConfig {
 
   static const String appName = 'Justiceland';
 
-  /// Shown on the More screen. Kept in step with `version:` in pubspec.yaml by
-  /// hand — Flutter does not expose it to Dart without a plugin, and one plugin
-  /// for one string on one screen is not a trade worth making.
-  static const String version = '1.0.8';
+  /// Shown on the More screen and sent with this phone's push registration.
+  /// Kept in step with `version:` in pubspec.yaml by hand — Flutter does not
+  /// expose it to Dart without a plugin — and test/app_version_test.dart fails
+  /// the moment the two drift apart.
+  static const String version = '10.0.1';
   static const String supportEmail = 'support@justiceland.online';
 
   /// How often live screens re-read the server. These mirror the web client:
