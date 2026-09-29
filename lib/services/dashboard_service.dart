@@ -1,5 +1,9 @@
-import 'package:dio/dio.dart';
+import 'dart:ui' show PlatformDispatcher;
 
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+
+import '../core/config/app_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/endpoints.dart';
 import '../models/account.dart';
@@ -97,10 +101,12 @@ class DashboardService {
 
   // ── Media ────────────────────────────────────────────────────────────────
 
-  /// Uploads an image and returns the URL to store on the profile.
-  Future<String> uploadImage(String filePath, {String fieldName = 'file'}) async {
+  /// Uploads an image and returns the URL to store on the profile. [kind] sets
+  /// the size it is stored at: `photo` (512px), `cover` or `gallery`.
+  Future<String> uploadImage(String filePath, {String fieldName = 'file', String kind = 'photo'}) async {
     final form = FormData.fromMap({
       fieldName: await MultipartFile.fromFile(filePath),
+      'kind': kind,
     });
     final data = await _api.upload(Endpoints.upload, form: form);
     final map = J.map(data);
@@ -160,16 +166,24 @@ class DashboardService {
 
   // ── Push notifications ───────────────────────────────────────────────────
 
-  /// Registers this device's Firebase token, so a new request or an incoming
-  /// call reaches the signed-in lawyer even with the app backgrounded or
-  /// closed. Called again whenever Firebase rotates the token.
-  Future<void> registerFcmToken(String token) =>
-      _api.post(Endpoints.fcmToken, body: {'token': token});
+  /// Registers this phone for pushes for whoever is signed in — client or
+  /// lawyer. Safe to repeat: the server keeps one row per token, and moves it
+  /// to this account if the phone was last signed in as someone else.
+  Future<void> registerDevice(String token) => _api.post(Endpoints.notificationDevices, body: {
+        'token': token,
+        'platform': switch (defaultTargetPlatform) {
+          TargetPlatform.android => 'android',
+          TargetPlatform.iOS => 'ios',
+          _ => 'other',
+        },
+        'appVersion': AppConfig.version,
+        'locale': PlatformDispatcher.instance.locale.toLanguageTag(),
+      });
 
-  /// Removes this device's token — called on sign-out, so a phone that has
-  /// moved on to a different account stops ringing for the one it left.
-  Future<void> unregisterFcmToken(String token) =>
-      _api.delete(Endpoints.fcmToken, body: {'token': token});
+  /// Takes this phone off the account it was registered for — on sign-out.
+  /// Works without a session: the token alone identifies the phone.
+  Future<void> unregisterDevice(String token) =>
+      _api.delete(Endpoints.notificationDevices, body: {'token': token});
 }
 
 /// A saved payout account as the server shows it: never the full number.

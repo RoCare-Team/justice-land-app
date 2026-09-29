@@ -155,6 +155,18 @@ class _App extends StatefulWidget {
 
 class _AppState extends State<_App> {
   @override
+  void initState() {
+    super.initState();
+    // Pushes for everyone, signed in or not: channels, the `all` topic, the
+    // tap handler, and registering this phone for whoever signs in. After the
+    // first frame, so the router it navigates with exists.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(context.read<PushService>().attach(context.read<AuthController>()));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthController>();
 

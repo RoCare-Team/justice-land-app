@@ -251,11 +251,11 @@ class Endpoints {
   /// replaces it. Stored privately — only the lawyer and admins can open them.
   static const String verificationDocuments = '/api/dashboard/verification-documents';
 
-  /// POST { token } — registers this device's Firebase Cloud Messaging token
-  /// against the signed-in lawyer, so a new request or an incoming call still
-  /// reaches them with the app backgrounded or closed.
-  /// DELETE { token } — removes it, on sign-out.
-  static const String fcmToken = '/api/dashboard/fcm-token';
+  /// POST { token, platform, appVersion, locale } — registers this phone for
+  /// pushes, for a signed-in client or lawyer. DELETE { token } on sign-out.
+  /// Replaced the lawyers-only /api/dashboard/fcm-token, which the server
+  /// still accepts from older installs.
+  static const String notificationDevices = '/api/notifications/devices';
 
   // ── Membership plans (lawyers) ───────────────────────────────────────────
   //
@@ -308,6 +308,9 @@ class Endpoints {
   /// GET ?lat=&lng= → reverse geocode to a city.
   static const String geocode = '/api/geocode';
 
-  /// POST — image upload, returns { url }.
-  static const String upload = '/api/admin/upload';
+  /// POST (multipart: file, kind?: photo | cover | gallery) → { url }.
+  /// The signed-in lawyer's image upload: the server resizes it and returns a
+  /// JPEG data URL to save with the profile. (Not /api/admin/upload — that
+  /// one only accepts an admin login and answered the app with 401.)
+  static const String upload = '/api/dashboard/upload';
 }
