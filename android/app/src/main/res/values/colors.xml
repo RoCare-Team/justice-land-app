@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Tints the push icon and app name in the notification shade: the app's gold. -->
+    <color name="notification_color">#D4A017</color>
 </resources>

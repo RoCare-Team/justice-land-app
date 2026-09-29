@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Notification sounds are referenced by name only (from Dart and from the
-     server's push payload), so resource shrinking cannot see them in use. -->
+<!-- Notification sounds and the notification icon are referenced by name only
+     (from Dart and from the server's push payload), so resource shrinking
+     cannot see them in use. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/call_ring,@raw/request_alert" />
+    tools:keep="@raw/call_ring,@raw/request_alert,@drawable/ic_notification" />

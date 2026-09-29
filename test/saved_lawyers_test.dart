@@ -66,18 +66,18 @@ void main() {
       expect(lawyer(planId: 'premium').paidPlanId, 'premium');
     });
 
-    testWidgets('₹499 shows Gold, ₹199 shows Silver, Starter shows neither',
+    testWidgets('₹499 shows the gold medal, ₹199 the silver, Starter neither',
         (tester) async {
       final saved = SavedLawyersController();
       final until = DateTime.now().add(const Duration(days: 30));
 
       await pumpCard(tester, lawyer(planId: 'premium', expires: until), saved);
-      expect(find.text('Gold'), findsOneWidget);
+      expect(find.text('🥇'), findsOneWidget);
 
       await pumpCard(
           tester, lawyer(planId: 'professional', expires: until), saved);
-      expect(find.text('Silver'), findsOneWidget);
-      expect(find.text('Gold'), findsNothing);
+      expect(find.text('🥈'), findsOneWidget);
+      expect(find.text('🥇'), findsNothing);
 
       await pumpCard(tester, lawyer(), saved);
       expect(find.byType(PlanTierBadge), findsNothing);
@@ -99,7 +99,7 @@ void main() {
         SavedLawyersController(),
         width: 320,
       );
-      expect(find.text('Gold'), findsOneWidget);
+      expect(find.text('🥇'), findsOneWidget);
       expect(find.text('Verified'), findsOneWidget);
     });
   });

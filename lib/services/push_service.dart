@@ -186,7 +186,9 @@ class PushService {
   ///
   /// Fails soft like the rest of this file: no Firebase, no pushes, and the
   /// app carries on.
-  Future<void> attach(AuthController auth) async {
+  /// [askPermission] is false on a first launch, so the notification prompt
+  /// does not land on top of the intro; sign-in asks then, as it always has.
+  Future<void> attach(AuthController auth, {bool askPermission = true}) async {
     if (_attached) return;
     _attached = true;
     _auth = auth;
@@ -195,7 +197,7 @@ class PushService {
 
       await _local.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings('ic_notification'),
           iOS: DarwinInitializationSettings(
             requestAlertPermission: false,
             requestBadgePermission: false,
@@ -211,6 +213,12 @@ class PushService {
 
       final messaging = FirebaseMessaging.instance;
       unawaited(messaging.subscribeToTopic('all'));
+      // Asked here as well as at sign-in: Android 13+ shows nothing without
+      // it, and the `all` topic's offers and festival greetings are for people
+      // who have not signed in too. Already answered, this shows no prompt.
+      if (askPermission) {
+        unawaited(messaging.requestPermission(alert: true, badge: true, sound: true));
+      }
       if (kDebugMode) unawaited(messaging.subscribeToTopic('test'));
 
       _openedSub?.cancel();
@@ -318,6 +326,7 @@ class PushService {
     final imageUrl = data['imageUrl']?.toString() ?? message.notification?.android?.imageUrl ?? '';
 
     StyleInformation? style;
+    AndroidBitmap<Object>? thumbnail;
     if (imageUrl.startsWith('https://')) {
       try {
         final res = await Dio().get<List<int>>(
@@ -326,11 +335,16 @@ class PushService {
         );
         final bytes = res.data;
         if (bytes != null && bytes.isNotEmpty) {
+          final picture = ByteArrayAndroidBitmap(Uint8List.fromList(bytes));
           style = BigPictureStyleInformation(
-            ByteArrayAndroidBitmap(Uint8List.fromList(bytes)),
+            picture,
             contentTitle: title,
             summaryText: body,
+            hideExpandedLargeIcon: true,
           );
+          // The same picture as a thumbnail on the collapsed notification, the
+          // way Android shows a push with an image that it draws itself.
+          thumbnail = picture;
         }
       } catch (_) {
         // No picture, still a notification.
@@ -350,6 +364,10 @@ class PushService {
           importance: isOffer ? Importance.defaultImportance : Importance.high,
           priority: isOffer ? Priority.defaultPriority : Priority.high,
           styleInformation: style ?? BigTextStyleInformation(body),
+          largeIcon: thumbnail,
+          // res/drawable/ic_notification: a flat silhouette, in the app's gold.
+          icon: 'ic_notification',
+          color: const Color(0xFFD4A017),
           tag: tag,
         ),
         iOS: const DarwinNotificationDetails(presentAlert: true, presentSound: true),

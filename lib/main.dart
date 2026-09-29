@@ -162,7 +162,10 @@ class _AppState extends State<_App> {
     // first frame, so the router it navigates with exists.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(context.read<PushService>().attach(context.read<AuthController>()));
+      unawaited(context.read<PushService>().attach(
+            context.read<AuthController>(),
+            askPermission: !widget.showIntro,
+          ));
     });
   }
 
