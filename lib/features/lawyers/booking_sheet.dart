@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
@@ -129,9 +130,10 @@ class _BookingSheetState extends State<BookingSheet> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     final balance = auth.walletBalance;
-    // What the wallet can cover, which becomes the session's ceiling.
+    // What the wallet can cover, which becomes the session's ceiling. A
+    // session needs the first few minutes covered before it can start.
     final affordableMinutes = _rate > 0 ? balance ~/ _rate : 0;
-    final canAfford = affordableMinutes >= 1;
+    final canAfford = affordableMinutes >= AppConfig.minStartMinutes;
 
     return SafeArea(
       child: Padding(
@@ -349,8 +351,9 @@ class _BookingSheetState extends State<BookingSheet> {
             tone: ChipTone.warning,
             icon: Icons.account_balance_wallet_outlined,
             message:
-                'This lawyer charges ${Fmt.rate(_rate)}. Add at least ₹$_rate to '
-                'your wallet to start.',
+                'You need at least ₹${_rate * AppConfig.minStartMinutes} in your wallet to start — '
+                '${AppConfig.minStartMinutes} minutes at ${Fmt.rate(_rate)}. '
+                'Add ₹${_rate * AppConfig.minStartMinutes - balance} more.',
           ),
           const SizedBox(height: 14),
           PrimaryButton(

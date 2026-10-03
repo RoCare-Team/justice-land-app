@@ -98,8 +98,27 @@ class ApiClient {
 
   /// Multipart upload — used for the profile photo and gallery, which the web
   /// app posts to /api/admin/upload as form data.
-  Future<dynamic> upload(String path, {required FormData form}) =>
-      _send(() => _dio.post(path, data: form));
+  Future<dynamic> upload(
+    String path, {
+    required FormData form,
+    ProgressCallback? onSendProgress,
+  }) =>
+      _send(() => _dio.post(path, data: form, onSendProgress: onSendProgress));
+
+  /// Raw bytes of a signed-in resource (a chat photo), or null on any failure
+  /// — a preview that does not load is not worth an error dialog.
+  Future<List<int>?> bytes(String path) async {
+    try {
+      final res = await _dio.get<List<int>>(
+        path,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final status = res.statusCode ?? 0;
+      return status >= 200 && status < 300 ? res.data : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   // ── Plumbing ─────────────────────────────────────────────────────────────
 

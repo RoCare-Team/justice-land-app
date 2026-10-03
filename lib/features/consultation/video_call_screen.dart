@@ -20,6 +20,7 @@ import '../../state/auth_controller.dart';
 import '../../state/session_controller.dart';
 import 'call_clock.dart';
 import 'call_recorder.dart';
+import 'chat_thread.dart';
 import 'session_shell.dart';
 
 /// A video consultation.
@@ -1016,6 +1017,8 @@ class _VideoCallViewState extends State<_VideoCallView> {
             active: true,
             onTap: _switchCamera,
           ),
+          // Chat over the call — send a document without hanging up.
+          if (session.status.isLive) InCallChatButton(viewerIsAdvocate: isAdvocate),
           _circleButton(
             icon: Icons.call_end_rounded,
             active: true,

@@ -150,6 +150,31 @@ class ConsultationService {
     return Consultation.fromJson(J.map(J.map(data)['session']));
   }
 
+  /// Sends a document or photo into a live session's chat and returns the
+  /// session with it appended. [onProgress] gets 0.0–1.0 as the bytes go up.
+  Future<Consultation> sendAttachment(
+    String id, {
+    required String path,
+    required String name,
+    String caption = '',
+    void Function(double progress)? onProgress,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(path, filename: name),
+      if (caption.trim().isNotEmpty) 'caption': caption.trim(),
+    });
+    final data = await _api.upload(
+      Endpoints.consultationAttachments(id),
+      form: form,
+      onSendProgress: onProgress == null
+          ? null
+          : (sent, total) {
+              if (total > 0) onProgress(sent / total);
+            },
+    );
+    return Consultation.fromJson(J.map(J.map(data)['session']));
+  }
+
   /// Tells the other side this one is typing. Fire-and-forget: a lost
   /// "typing" is not worth an error.
   Future<void> typing(String id) async {

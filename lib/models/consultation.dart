@@ -353,6 +353,7 @@ class ChatMessage {
     required this.from,
     required this.text,
     this.at,
+    this.attachment,
   });
 
   final String id;
@@ -363,13 +364,79 @@ class ChatMessage {
   final String text;
   final DateTime? at;
 
+  /// A document or photo sent with the message, if any.
+  final ChatAttachment? attachment;
+
   bool get fromUser => from == 'user';
+
+  /// What to show as the message's words. A file sent without a caption
+  /// carries "📎 <name>" as its text, for apps that predate attachments; the
+  /// file card already says that, so it is not repeated under it.
+  String get caption {
+    final a = attachment;
+    if (a != null && text == '📎 ${a.name}') return '';
+    return text;
+  }
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
         id: J.id(j['id'] ?? j['_id']),
         from: J.str(j['from']),
         text: J.str(j['text']),
         at: J.date(j['at']),
+        attachment: j['attachment'] is Map
+            ? ChatAttachment.fromJson(J.map(j['attachment']))
+            : null,
+      );
+}
+
+/// A file inside a consultation chat — a PDF of a notice, a photo of an FIR.
+///
+/// [url] needs the app's sign-in cookie (fine for the in-app image preview,
+/// which downloads through the API client). [signedUrl] carries its own
+/// short-lived permission, for handing the file to the phone's browser or PDF
+/// viewer, which do not have that cookie.
+class ChatAttachment {
+  const ChatAttachment({
+    required this.id,
+    required this.name,
+    this.mimeType = '',
+    this.size = 0,
+    this.url = '',
+    this.signedUrl = '',
+  });
+
+  final String id;
+  final String name;
+  final String mimeType;
+  final int size;
+  final String url;
+  final String signedUrl;
+
+  String get extension {
+    final dot = name.lastIndexOf('.');
+    return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+  }
+
+  bool get isImage =>
+      mimeType.startsWith('image/') ||
+      const ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'].contains(extension);
+
+  bool get isPdf => mimeType == 'application/pdf' || extension == 'pdf';
+
+  /// "1.4 MB" / "320 KB".
+  String get sizeLabel {
+    if (size >= 1024 * 1024) return '${(size / 1024 / 1024).toStringAsFixed(1)} MB';
+    final kb = (size / 1024).round();
+    return '${kb < 1 ? 1 : kb} KB';
+  }
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
+        id: J.id(j['id']),
+        name: J.str(j['name'], 'file'),
+        mimeType: J.str(j['mimeType']),
+        size: J.int$(j['size']),
+        url: J.str(j['url']),
+        signedUrl: J.str(j['signedUrl']),
       );
 }
 

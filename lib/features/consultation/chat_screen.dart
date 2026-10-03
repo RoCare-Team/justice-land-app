@@ -3,12 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/utils/formatters.dart';
 import '../../core/widgets/states.dart';
 import '../../models/consultation.dart';
 import '../../services/consultation_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/session_controller.dart';
+import 'chat_thread.dart';
 import 'session_shell.dart';
 
 /// A live chat consultation.
@@ -45,13 +45,11 @@ class _ChatView extends StatefulWidget {
 }
 
 class _ChatViewState extends State<_ChatView> {
-  final _input = TextEditingController();
   final _scroll = ScrollController();
   int _lastCount = 0;
 
   @override
   void dispose() {
-    _input.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -65,19 +63,6 @@ class _ChatViewState extends State<_ChatView> {
         curve: Curves.easeOut,
       );
     });
-  }
-
-  Future<void> _send(SessionController controller) async {
-    final text = _input.text.trim();
-    if (text.isEmpty) return;
-    _input.clear();
-    final ok = await controller.sendMessage(text);
-    if (!ok && mounted) {
-      // Put the text back rather than losing what they typed.
-      _input.text = text;
-      Toast.error(context, controller.error ?? 'Could not send the message.');
-      controller.clearError();
-    }
   }
 
   @override
@@ -104,8 +89,12 @@ class _ChatViewState extends State<_ChatView> {
       );
     }
 
-    if (session.messages.length != _lastCount) {
-      _lastCount = session.messages.length;
+    // An upload in flight adds a bubble at the bottom too.
+    final shown = session.messages.length +
+        controller.pendingTexts.length +
+        (controller.uploadingName == null ? 0 : 1);
+    if (shown != _lastCount) {
+      _lastCount = shown;
       _scrollToEnd();
     }
 
@@ -183,135 +172,35 @@ class _ChatViewState extends State<_ChatView> {
                       if (context.mounted) context.pop();
                     },
                   ),
-                ConsultationStatus.active => _messages(session, isAdvocate),
+                ConsultationStatus.active => ColoredBox(
+                    // The website's chat backdrop, so the bubbles read the same.
+                    color: const Color(0xFFF4F6FA),
+                    child: _messages(session, isAdvocate, controller),
+                  ),
                 _ => EndedPanel(session: session, viewerIsAdvocate: isAdvocate),
               },
             ),
-            if (session.status.isLive) _composer(controller),
+            if (session.status.isLive) const ChatComposer(),
           ],
         ),
       ),
     );
   }
 
-  Widget _messages(Consultation session, bool isAdvocate) {
-    if (session.messages.isEmpty) {
-      return EmptyView(
+  Widget _messages(Consultation session, bool isAdvocate, SessionController controller) {
+    return ChatMessageList(
+      messages: session.messages,
+      viewerIsAdvocate: isAdvocate,
+      controller: _scroll,
+      uploadingName: controller.uploadingName,
+      uploadProgress: controller.uploadProgress,
+      pending: controller.pendingTexts,
+      empty: EmptyView(
         icon: Icons.chat_bubble_outline_rounded,
         title: 'The floor is yours',
         message: isAdvocate
-            ? 'Say hello — the client is waiting.'
-            : 'Describe your matter. The clock is running, so be direct.',
-      );
-    }
-
-    return ListView.builder(
-      controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
-      itemCount: session.messages.length,
-      itemBuilder: (context, index) {
-        final message = session.messages[index];
-        final mine = isAdvocate ? !message.fromUser : message.fromUser;
-        return Align(
-          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.78,
-            ),
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: mine ? AppColors.primary : AppColors.surface,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: Radius.circular(mine ? 16 : 4),
-                bottomRight: Radius.circular(mine ? 4 : 16),
-              ),
-              border: mine ? null : Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment:
-                  mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message.text,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                    color: mine ? Colors.white : AppColors.inkStrong,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  Fmt.time(message.at),
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    color: mine ? Colors.white70 : AppColors.inkFaint,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _composer(SessionController controller) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _input,
-                maxLines: 4,
-                minLines: 1,
-                maxLength: 2000,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Write a message',
-                  counterText: '',
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-                onSubmitted: (_) => _send(controller),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Material(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: controller.sending ? null : () => _send(controller),
-                child: Container(
-                  height: 46,
-                  width: 46,
-                  alignment: Alignment.center,
-                  child: controller.sending
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                ),
-              ),
-            ),
-          ],
-        ),
+            ? 'Say hello — the client is waiting. Use the paperclip to share a document.'
+            : 'Describe your matter, or attach the notice or document it is about. The clock is running, so be direct.',
       ),
     );
   }

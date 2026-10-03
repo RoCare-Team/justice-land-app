@@ -152,9 +152,16 @@ class SessionController extends ChangeNotifier {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
+  /// Messages sent but not yet confirmed by the server, oldest first. The
+  /// chat shows them at once with a clock, the way the website does, rather
+  /// than making the sender watch a spinner on the send button.
+  final List<String> _pendingTexts = [];
+  List<String> get pendingTexts => List.unmodifiable(_pendingTexts);
+
   Future<bool> sendMessage(String text) async {
     final clean = text.trim();
     if (clean.isEmpty) return false;
+    _pendingTexts.add(clean);
     _sending = true;
     _safeNotify();
     try {
@@ -168,7 +175,57 @@ class SessionController extends ChangeNotifier {
       _error = e.message;
       return false;
     } finally {
-      _sending = false;
+      // Confirmed (the returned thread now has it) or failed (the composer
+      // puts the text back) — either way it is no longer pending.
+      _pendingTexts.remove(clean);
+      _sending = _pendingTexts.isNotEmpty;
+      _safeNotify();
+    }
+  }
+
+  // ── Attachments ──────────────────────────────────────────────────────────
+
+  /// The file going up right now, and how far along it is (0.0–1.0) — the
+  /// chat shows a bubble with a bar for it until the server has it.
+  String? _uploadingName;
+  double _uploadProgress = 0;
+  String? get uploadingName => _uploadingName;
+  double get uploadProgress => _uploadProgress;
+
+  /// Largest file the server accepts, mirrored so the app can refuse before
+  /// spending the user's data on an upload that will bounce.
+  static const int maxAttachmentBytes = 10 * 1024 * 1024;
+
+  /// Send a document or photo. Returns null on success, or the reason it
+  /// failed for the screen to show.
+  Future<String?> sendAttachment({
+    required String path,
+    required String name,
+    required int size,
+    String caption = '',
+  }) async {
+    if (_uploadingName != null) return 'Wait for the current file to finish sending.';
+    if (size > maxAttachmentBytes) return '"$name" is over 10 MB.';
+    _uploadingName = name;
+    _uploadProgress = 0;
+    _safeNotify();
+    try {
+      _session = await _service.sendAttachment(
+        consultationId,
+        path: path,
+        name: name,
+        caption: caption,
+        onProgress: (p) {
+          _uploadProgress = p;
+          _safeNotify();
+        },
+      );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } finally {
+      _uploadingName = null;
+      _uploadProgress = 0;
       _safeNotify();
     }
   }

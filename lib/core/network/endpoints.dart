@@ -111,7 +111,8 @@ class Endpoints {
 
   /// POST { advocateId, type, resumeFrom? } → { ok, session }
   /// Per minute at the lawyer's rate: 400 if they do not offer the channel,
-  /// 402 `insufficient` when the wallet cannot cover the first minute.
+  /// 402 `insufficient` when the wallet cannot cover the first 3 minutes
+  /// (AppConfig.minStartMinutes); its `message` says how much to add.
   static const String consultationCreate = '/api/consultations';
 
   /// GET ?scope=mine → { consultations } — the signed-in participant's own
@@ -128,6 +129,11 @@ class Endpoints {
 
   /// POST {} — "I am typing": the other side sees it for a few seconds.
   static String consultationTyping(String id) => '/api/consultations/$id/typing';
+
+  /// POST multipart { file, caption? } → { session } — a document or photo
+  /// sent into a live session's chat (PDF, image, Word, Excel, text; ≤ 10 MB).
+  static String consultationAttachments(String id) =>
+      '/api/consultations/$id/attachments';
 
   /// POST { upTo } — everything received up to this moment has been read.
   static String consultationRead(String id) => '/api/consultations/$id/read';

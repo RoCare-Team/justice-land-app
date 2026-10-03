@@ -11,6 +11,7 @@ import '../../services/consultation_service.dart';
 import '../../state/audio_call.dart';
 import '../../state/auth_controller.dart';
 import '../../state/session_controller.dart';
+import 'chat_thread.dart';
 import 'session_shell.dart';
 
 /// An audio consultation.
@@ -329,6 +330,8 @@ class _AudioCallView extends StatelessWidget {
             active: call.speakerOn,
             onTap: call.toggleSpeaker,
           ),
+          // Chat over the call — send a document without hanging up.
+          if (session.status.isLive) InCallChatButton(viewerIsAdvocate: isAdvocate),
           _circleButton(
             icon: Icons.call_end_rounded,
             active: true,

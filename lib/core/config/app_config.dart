@@ -31,8 +31,15 @@ class AppConfig {
   /// Kept in step with `version:` in pubspec.yaml by hand — Flutter does not
   /// expose it to Dart without a plugin — and test/app_version_test.dart fails
   /// the moment the two drift apart.
-  static const String version = '10.0.1';
+  static const String version = '10.0.3';
   static const String supportEmail = 'support@justiceland.online';
+
+  /// The wallet has to cover this many minutes at the lawyer's rate before a
+  /// chat, audio or video consultation can start. The server enforces the
+  /// same number (MIN_START_MINUTES in src/constants/callRates.js) and answers
+  /// 402 `insufficient` below it; this only says so before the button is
+  /// pressed. Keep the two in step.
+  static const int minStartMinutes = 3;
 
   /// How often live screens re-read the server. These mirror the web client:
   /// the consultation screens poll, they do not hold a socket open.
