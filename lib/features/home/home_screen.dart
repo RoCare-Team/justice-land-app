@@ -56,7 +56,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
+      // The website's "Ask a lawyer" popup, offered once on its own — see
+      // AskLawyerPrompt for when it stays quiet.
+      AskLawyerPrompt.maybeShow(context);
+    });
   }
 
   @override
@@ -160,7 +165,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.muted,
-      body: HeaderStatusBand(
+      body: Stack(
+        children: [
+      HeaderStatusBand(
         child: RefreshIndicator(
           onRefresh: _load,
           // Drop the spinner clear of the band, or it turns beneath it.
@@ -188,7 +195,9 @@ class _HomeScreenState extends State<HomeScreen> {
             // find a lawyer, so the lawyers sit directly under the category
             // strip — not third, after a hero panel and a grid of tiles.
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomGutter(context)),
+              // Extra room at the end so the floating Ask pill never sits on
+              // the last card.
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomGutter(context, 92)),
               sliver: SliverList.list(
                 children: [
                   const SizedBox(height: 8),
@@ -213,6 +222,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+      ),
+          // "Ask a lawyer — free", always one tap away, like the website's
+          // corner button. Clients only; MediaQuery's bottom padding already
+          // includes the floating tab bar.
+          if (!auth.isAdvocate)
+            Positioned(
+              left: 16,
+              bottom: MediaQuery.paddingOf(context).bottom + 14,
+              child: const AskLawyerFab(),
+            ),
+        ],
       ),
     );
   }
