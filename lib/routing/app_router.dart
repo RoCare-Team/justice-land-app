@@ -15,6 +15,8 @@ import '../features/consultation/consultations_screen.dart';
 import '../features/consultation/video_call_screen.dart';
 import '../features/content/content_screens.dart';
 import '../features/dashboard/edit_profile_screen.dart';
+import '../features/document_review/document_review_screen.dart';
+import '../features/document_review/review_screens.dart';
 import '../features/home/home_screen.dart';
 import '../features/lawyer/lawyer_routes.dart';
 import '../features/lawyers/advocate_profile_screen.dart';
@@ -180,6 +182,23 @@ class AppRouter {
                   OrderSummaryScreen(slug: state.pathParameters['slug']!),
             ),
           ],
+        ),
+        // Smart Document Check (?kind=ai) and Advocate Document Opinion
+        // (?kind=expert) — the website's /document-review.
+        GoRoute(
+          path: '/document-review',
+          builder: (context, state) => DocumentReviewScreen(
+            initialKind: state.uri.queryParameters['kind'] ?? 'ai',
+          ),
+        ),
+        GoRoute(
+          path: '/document-reviews',
+          builder: (_, __) => const MyDocumentReviewsScreen(),
+        ),
+        GoRoute(
+          path: '/document-reviews/:id',
+          builder: (context, state) =>
+              DocumentReviewDetailScreen(reviewId: state.pathParameters['id']!),
         ),
         GoRoute(
           path: '/orders',

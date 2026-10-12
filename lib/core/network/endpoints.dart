@@ -135,6 +135,29 @@ class Endpoints {
   static String consultationAttachments(String id) =>
       '/api/consultations/$id/attachments';
 
+  // ── Document reviews ─────────────────────────────────────────────────────
+  // Smart Document Check (kind 'ai') and Advocate Document Opinion
+  // (kind 'expert'): one API, the kind decides which.
+
+  /// GET → { pricing, reviews } — prices, accepted files, document areas, and
+  /// the signed-in client's own reviews.
+  /// POST multipart { kind, file, area?, question? } →
+  ///   { paid: true, reviewId, price }                       (wallet paid it)
+  ///   { reviewId, pages, price, orderId, amount, keyId, … }  (open Razorpay)
+  static const String documentReviews = '/api/document-review';
+
+  /// POST { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+  ///   → { ok, review } · 202 { pending, reviewId }
+  static const String documentReviewVerify = '/api/document-review/verify';
+
+  /// GET → { review }. Runs a paid AI read that has not run yet, so it can
+  /// take up to a minute.
+  static String documentReview(String id) => '/api/document-review/$id';
+
+  /// Lawyer: GET → { reviews } assigned to them; POST { id, report } sends
+  /// the written opinion.
+  static const String lawyerDocumentReviews = '/api/dashboard/document-reviews';
+
   /// POST { upTo } — everything received up to this moment has been read.
   static String consultationRead(String id) => '/api/consultations/$id/read';
 

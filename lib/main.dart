@@ -18,6 +18,7 @@ import 'services/marketplace_service.dart';
 import 'services/membership_service.dart';
 import 'services/voice_service.dart';
 import 'services/push_service.dart';
+import 'services/document_review_service.dart';
 import 'services/query_service.dart';
 import 'services/wallet_service.dart';
 import 'features/consultation/active_call_bar.dart';
@@ -87,6 +88,7 @@ class JusticelandApp extends StatelessWidget {
         Provider(create: (_) => ContentService(api)),
         Provider(create: (_) => MarketplaceService(api)),
         Provider(create: (_) => QueryService(api)),
+        Provider(create: (_) => DocumentReviewService(api)),
         Provider(create: (_) => MembershipService(api)),
         Provider(create: (_) => VoiceService(api)),
         Provider(create: (context) => PushService(context.read<DashboardService>())),

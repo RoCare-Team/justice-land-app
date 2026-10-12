@@ -132,6 +132,7 @@ class LawyerProfileScreen extends StatelessWidget {
                   _link(context, Icons.verified_user_outlined, 'Verification & practice areas', '/lawyer/onboarding'),
                   _link(context, Icons.workspace_premium_outlined, 'My Plan', '/lawyer/plan'),
                   _link(context, Icons.account_balance_wallet_outlined, 'Earnings', '/lawyer/earnings'),
+                  _link(context, Icons.assignment_turned_in_outlined, 'Document Opinions', '/lawyer/document-reviews'),
                   _link(context, Icons.toggle_on_outlined, 'Availability', '/lawyer/availability'),
                   _link(context, Icons.notifications_none_rounded, 'Notifications', '/lawyer/notifications'),
                   _link(context, Icons.settings_outlined, 'Settings', '/lawyer/settings'),

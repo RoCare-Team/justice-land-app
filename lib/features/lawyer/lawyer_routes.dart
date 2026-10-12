@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import '../document_review/lawyer_document_reviews_screen.dart';
 
 import 'client_details_screen.dart';
 import 'lawyer_availability_screen.dart';
@@ -34,6 +35,7 @@ final List<RouteBase> lawyerRoutes = [
     ),
   ),
   GoRoute(path: '/lawyer/earnings', builder: (_, __) => const LawyerEarningsScreen()),
+  GoRoute(path: '/lawyer/document-reviews', builder: (_, __) => const LawyerDocumentReviewsScreen()),
   GoRoute(path: '/lawyer/availability', builder: (_, __) => const LawyerAvailabilityScreen()),
   GoRoute(path: '/lawyer/notifications', builder: (_, __) => const LawyerNotificationsScreen()),
   GoRoute(path: '/lawyer/settings', builder: (_, __) => const LawyerSettingsScreen()),

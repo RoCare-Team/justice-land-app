@@ -15,6 +15,7 @@ import '../../services/content_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/location_controller.dart';
 import '../lawyers/advocate_card.dart';
+import '../document_review/document_review_screen.dart' show DocumentReviewPromo;
 import '../queries/ask_lawyer_sheet.dart';
 import 'find_lawyer_prompt.dart';
 import 'location_sheet.dart';
@@ -268,6 +269,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   // what happened, and a lawyer calls them. No account needed.
                   const AskLawyerBanner(),
                   const SizedBox(height: 26),
+                  // Smart Document Check / Advocate Document Opinion — the
+                  // website's "get your papers checked" pair. Clients only.
+                  if (!auth.isAdvocate) ...[
+                    const DocumentReviewPromo(),
+                    const SizedBox(height: 26),
+                  ],
                   if (_topRated.isNotEmpty) ...[
                     _topRatedSection(),
                     const SizedBox(height: 26),

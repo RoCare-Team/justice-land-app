@@ -128,6 +128,11 @@ class ProfileScreen extends StatelessWidget {
                 onTap: () => context.push('/orders'),
               ),
               _Row(
+                icon: Icons.document_scanner_outlined,
+                label: 'My Document Reviews',
+                onTap: () => context.push('/document-reviews'),
+              ),
+              _Row(
                 icon: Icons.article_outlined,
                 label: 'Legal Guides',
                 onTap: () => context.push('/blogs'),

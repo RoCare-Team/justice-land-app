@@ -72,20 +72,35 @@ class ApiClient {
 
   // ── Verbs ────────────────────────────────────────────────────────────────
 
+  /// [timeout] overrides the 30-second receive timeout for one call — for the
+  /// few routes that do real work before answering, like an AI document read.
   Future<dynamic> get(
     String path, {
     Map<String, dynamic>? query,
     CancelToken? cancelToken,
+    Duration? timeout,
   }) =>
-      _send(() => _dio.get(path, queryParameters: query, cancelToken: cancelToken));
+      _send(() => _dio.get(
+            path,
+            queryParameters: query,
+            cancelToken: cancelToken,
+            options: timeout == null ? null : Options(receiveTimeout: timeout),
+          ));
 
   Future<dynamic> post(
     String path, {
     Object? body,
     Map<String, dynamic>? query,
     CancelToken? cancelToken,
+    Duration? timeout,
   }) =>
-      _send(() => _dio.post(path, data: body, queryParameters: query, cancelToken: cancelToken));
+      _send(() => _dio.post(
+            path,
+            data: body,
+            queryParameters: query,
+            cancelToken: cancelToken,
+            options: timeout == null ? null : Options(receiveTimeout: timeout),
+          ));
 
   Future<dynamic> put(String path, {Object? body}) =>
       _send(() => _dio.put(path, data: body));
@@ -102,8 +117,14 @@ class ApiClient {
     String path, {
     required FormData form,
     ProgressCallback? onSendProgress,
+    Duration? timeout,
   }) =>
-      _send(() => _dio.post(path, data: form, onSendProgress: onSendProgress));
+      _send(() => _dio.post(
+            path,
+            data: form,
+            onSendProgress: onSendProgress,
+            options: timeout == null ? null : Options(sendTimeout: timeout, receiveTimeout: timeout),
+          ));
 
   /// Raw bytes of a signed-in resource (a chat photo), or null on any failure
   /// — a preview that does not load is not worth an error dialog.
