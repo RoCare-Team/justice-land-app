@@ -32,6 +32,11 @@ class AppConfig {
   /// expose it to Dart without a plugin — and test/app_version_test.dart fails
   /// the moment the two drift apart.
   static const String version = '10.0.3';
+
+  /// The build number after the `+` in pubspec.yaml's `version:` — Android's
+  /// versionCode, iOS's CFBundleVersion. What the update check compares
+  /// (AppUpdateGate), and kept in step the same way as [version].
+  static const int build = 12;
   static const String supportEmail = 'support@justiceland.online';
 
   /// The wallet has to cover this many minutes at the lawyer's rate before a

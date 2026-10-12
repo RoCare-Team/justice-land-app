@@ -46,7 +46,7 @@ dependencies:
   # with the microphone's level alongside it. flutter_webrtc's recorder cannot
   # do this — it records a call's channels and reports no amplitude, and the
   # amplitude is what lets the recording stop by itself when the speaking does.
-  record: ^5.1.2
+  record: ^6.2.1
 
   # ── Push notifications ────────────────────────────────────────────────────
   # A new request or an incoming call reaching a lawyer whose app is

@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.annotation.RequiresApi
+import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -23,6 +24,17 @@ class MainActivity : FlutterActivity() {
     private var inCall = false
     private var pipChannel: MethodChannel? = null
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge to edge on every Android version, not only 15+ where it is
+        // forced: the app draws under the status and navigation bars and
+        // pads itself (SafeArea, HeaderStatusBand). main.dart asks for the
+        // same through SystemUiMode.edgeToEdge; doing it here as well means
+        // it holds from the very first frame.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        super.onCreate(savedInstanceState)
+        noteLaunch(intent)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         launchChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "justiceland/launch").apply {
@@ -34,6 +46,22 @@ class MainActivity : FlutterActivity() {
                     }
                     else -> result.notImplemented()
                 }
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "justiceland/call").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> result.success(
+                    OngoingCallService.start(
+                        applicationContext,
+                        call.argument<String>("title"),
+                        call.argument<Boolean>("video") == true,
+                    )
+                )
+                "stop" -> {
+                    OngoingCallService.stop(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
             }
         }
         pipChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "justiceland/pip").apply {
@@ -83,11 +111,6 @@ class MainActivity : FlutterActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pipChannel?.invokeMethod("changed", isInPictureInPictureMode)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        noteLaunch(intent)
     }
 
     override fun onNewIntent(intent: Intent) {

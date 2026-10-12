@@ -1,5 +1,6 @@
 import '../core/network/api_client.dart';
 import '../core/network/endpoints.dart';
+import 'account_deletion.dart';
 import '../models/account.dart';
 import '../models/advocate.dart';
 import '../models/json.dart';
@@ -214,12 +215,12 @@ class AuthService {
     }
   }
 
-  /// Permanently deletes the signed-in client's account — the client twin of
-  /// the lawyer's DELETE /api/dashboard/profile. The session cookie says whose
-  /// account it is: no id is sent and no key is compiled into the app, so this
-  /// can only ever delete the caller's own account (App Store 5.1.1(v)).
-  Future<void> deleteAccount() async {
-    await _api.delete(Endpoints.userMe);
+  // ── Delete account ───────────────────────────────────────────────────────
+
+  /// Permanently deletes the signed-in client's account (App Store 5.1.1(v)),
+  /// through the admin route by user id — see [AccountDeletion].
+  Future<void> deleteAccount(String userId) async {
+    await AccountDeletion.user(userId);
     await _api.clearSession();
   }
 }

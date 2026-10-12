@@ -763,35 +763,98 @@ class AskLawyerPrompt {
 /// The floating "Ask a lawyer — free" pill, the app's copy of the website's
 /// button in the corner: always one tap from the problem, with the mic on it.
 class AskLawyerFab extends StatelessWidget {
-  const AskLawyerFab({super.key});
+  const AskLawyerFab({super.key, this.extended = true});
+
+  /// The full pill with its two lines; folded, just the round mic — Home
+  /// folds it while the list is being scrolled down, so it never sits on a
+  /// lawyer's card, and opens it again on the way back up.
+  final bool extended;
+
+  static const _height = 54.0;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.accent,
-      elevation: 6,
-      shadowColor: AppColors.accent.withValues(alpha: 0.5),
-      shape: const StadiumBorder(),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: () => AskLawyerSheet.open(context),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                height: 32,
-                width: 32,
-                decoration: const BoxDecoration(color: AppColors.primaryDark, shape: BoxShape.circle),
-                child: const Icon(Icons.mic_rounded, size: 18, color: AppColors.accent),
+    return Semantics(
+      button: true,
+      label: 'Ask a lawyer for free',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(_height / 2),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.primaryLight, AppColors.primaryDark],
+          ),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.55)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryDark.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: const StadiumBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => AskLawyerSheet.open(context),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                height: _height - 2,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(7, 7, extended ? 18 : 7, 7),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 38,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFF2C94C), AppColors.accent],
+                          ),
+                        ),
+                        child: const Icon(Icons.mic_rounded, size: 21, color: AppColors.primaryDark),
+                      ),
+                      if (extended) ...[
+                        const SizedBox(width: 10),
+                        const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Ask a lawyer',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                height: 1.15,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Free · speak or type',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                height: 1.25,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFF2C94C),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'Ask a lawyer — free',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF241B02)),
-              ),
-            ],
+            ),
           ),
         ),
       ),

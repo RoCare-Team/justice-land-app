@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
 import '../core/widgets/states.dart';
+import '../core/widgets/tab_back_guard.dart';
 import '../features/account/more_screen.dart';
 import '../features/account/profile_screen.dart';
 import '../features/account/wallet_screen.dart';
@@ -236,6 +237,7 @@ class AppRouter {
               ChatScreen(
                 consultationId: state.pathParameters['id']!,
                 acceptOnOpen: _answering(state),
+                duringCall: state.uri.queryParameters['call'] == '1',
               ),
         ),
         GoRoute(
@@ -354,7 +356,7 @@ class AppShell extends StatelessWidget {
 
     final middle = tabs.length ~/ 2;
 
-    return Scaffold(
+    return TabBackGuard(homePath: '/', child: Scaffold(
       body: child,
       extendBody: true,
       bottomNavigationBar: Container(
@@ -388,7 +390,7 @@ class AppShell extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _flatTab(BuildContext context, AppTab tab, bool selected) {

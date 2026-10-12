@@ -158,6 +158,12 @@ class RemoteImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final empty = fallback ?? const SizedBox.shrink();
+    // Decode only enough pixels for the box being painted. Backend profile
+    // photos can be several megabytes; decoding their original dimensions for
+    // a 44px avatar wastes memory and triggers Play's bitmap warning.
+    final scale = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = width == null ? null : (width! * scale).round();
+    final cacheHeight = height == null ? null : (height! * scale).round();
 
     final bytes = inlineBytes(source);
     if (bytes != null) {
@@ -166,6 +172,8 @@ class RemoteImage extends StatelessWidget {
         fit: fit,
         width: width,
         height: height,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
         errorBuilder: (_, __, ___) => empty,
       );
     }
@@ -178,6 +186,10 @@ class RemoteImage extends StatelessWidget {
       fit: fit,
       width: width,
       height: height,
+      memCacheWidth: cacheWidth,
+      memCacheHeight: cacheHeight,
+      maxWidthDiskCache: cacheWidth,
+      maxHeightDiskCache: cacheHeight,
       placeholder: (_, __) => placeholder ?? Container(color: AppColors.muted),
       errorWidget: (_, __, ___) => empty,
     );
@@ -193,11 +205,16 @@ class Avatar extends StatelessWidget {
     this.size = 44,
     this.online,
     this.onDark = false,
+    this.expandable = false,
   });
 
   final String name;
   final String? photo;
   final double size;
+
+  /// Tapping opens the photograph full size (see [showPhotoViewer]). Off by
+  /// default: most avatars sit inside a row that already has its own tap.
+  final bool expandable;
 
   /// Null hides the dot entirely — "unknown" and "offline" are different
   /// things, and a grey dot on a lawyer whose status has not loaded reads as
@@ -246,28 +263,101 @@ class Avatar extends StatelessWidget {
       ),
     );
 
-    if (online == null) return avatar;
+    final framed = online == null
+        ? avatar
+        : Stack(
+            clipBehavior: Clip.none,
+            children: [
+              avatar,
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  height: size * 0.28,
+                  width: size * 0.28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: online! ? AppColors.success : AppColors.inkFaint,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+            ],
+          );
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        avatar,
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: Container(
-            height: size * 0.28,
-            width: size * 0.28,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: online! ? AppColors.success : AppColors.inkFaint,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-          ),
-        ),
-      ],
+    // Only a real photograph opens — enlarging an initial shows nothing new.
+    if (!expandable || !RemoteImage.has(photo)) return framed;
+    return GestureDetector(
+      onTap: () => showPhotoViewer(context, photo: photo, title: name),
+      child: framed,
     );
   }
+}
+
+/// A photograph full screen, pinch-to-zoom, over a dark scrim.
+Future<void> showPhotoViewer(
+  BuildContext context, {
+  required String? photo,
+  String title = '',
+}) {
+  return showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.92),
+    builder: (dialogContext) => Dialog.fullscreen(
+      backgroundColor: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.pop(dialogContext),
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 5,
+                child: Center(
+                  child: RemoteImage(
+                    source: photo,
+                    fit: BoxFit.contain,
+                    placeholder: const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                    fallback: const Icon(
+                      Icons.broken_image_outlined,
+                      size: 48,
+                      color: Colors.white54,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(dialogContext),
+                ),
+                if (title.isNotEmpty)
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Five stars plus the numeric rating, as on the profile header.

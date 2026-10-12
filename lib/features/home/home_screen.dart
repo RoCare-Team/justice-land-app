@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -15,7 +16,7 @@ import '../../state/auth_controller.dart';
 import '../../state/location_controller.dart';
 import '../lawyers/advocate_card.dart';
 import '../queries/ask_lawyer_sheet.dart';
-import '../voice/voice_search_sheet.dart';
+import 'find_lawyer_prompt.dart';
 import 'location_sheet.dart';
 
 /// The home screen — the same sections the website's homepage has, in the
@@ -53,15 +54,64 @@ class _HomeScreenState extends State<HomeScreen> {
   /// What the visitor typed in "What is your legal matter?".
   final TextEditingController _matter = TextEditingController();
 
+  /// The sign-in prompt shows once per launch, not every time Home is opened.
+  static bool _signInPrompted = false;
+
+  /// The Ask button's full pill, folded to its mic while scrolling down.
+  bool _askExtended = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
+      _promptSignIn();
       // The website's "Ask a lawyer" popup, offered once on its own — see
-      // AskLawyerPrompt for when it stays quiet.
+      // AskLawyerPrompt for when it stays quiet (it waits, and never opens
+      // over the sign-in question above).
       AskLawyerPrompt.maybeShow(context);
     });
+  }
+
+  /// Asks a signed-out visitor — client or lawyer — to sign in. Browsing stays
+  /// open to them: "Not now" just closes it.
+  Future<void> _promptSignIn() async {
+    final auth = context.read<AuthController>();
+    if (_signInPrompted || !auth.isResolved || auth.isSignedIn) return;
+    _signInPrompted = true;
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.lock_person_outlined, color: AppColors.primary, size: 36),
+        title: const Text('You are not signed in'),
+        content: const Text(
+          'Sign in to book consultations, chat with lawyers and keep your history. '
+          'Lawyers can sign in to manage their practice.',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsOverflowDirection: VerticalDirection.down,
+        actionsOverflowButtonSpacing: 8,
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, 'user'),
+            child: const Text('Sign in as User'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(dialogContext, 'lawyer'),
+            child: const Text('Sign in as Lawyer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Not now'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'user') context.push('/login?redirect=/');
+    if (choice == 'lawyer') context.push('/advocate/login');
   }
 
   @override
@@ -165,10 +215,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.muted,
-      body: Stack(
-        children: [
-      HeaderStatusBand(
-        child: RefreshIndicator(
+      // The list scrolls under "Find your lawyer", which stays put on the
+      // right edge instead of holding a row of the list open.
+      body: Stack(children: [HeaderStatusBand(
+        child: NotificationListener<UserScrollNotification>(
+          // Scrolling down the list folds the Ask button to its round mic;
+          // scrolling back up, or reaching the top, opens it again.
+          onNotification: (n) {
+            if (n.depth != 0) return false;
+            final extended = n.direction == ScrollDirection.forward ||
+                (n.direction == ScrollDirection.idle && n.metrics.pixels <= 0) ||
+                (n.direction == ScrollDirection.idle && _askExtended);
+            if (extended != _askExtended) setState(() => _askExtended = extended);
+            return false;
+          },
+          child: RefreshIndicator(
           onRefresh: _load,
           // Drop the spinner clear of the band, or it turns beneath it.
           edgeOffset: MediaQuery.paddingOf(context).top,
@@ -222,18 +283,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+        ),
       ),
-          // "Ask a lawyer — free", always one tap away, like the website's
-          // corner button. Clients only; MediaQuery's bottom padding already
-          // includes the floating tab bar.
-          if (!auth.isAdvocate)
-            Positioned(
-              left: 16,
-              bottom: MediaQuery.paddingOf(context).bottom + 14,
-              child: const AskLawyerFab(),
-            ),
-        ],
-      ),
+        if (auth.isUser)
+          // Fills Home so the tab can be dragged anywhere on it; only the tab
+          // itself takes touches, the rest passes through to the list.
+          const Positioned.fill(child: FindLawyerCard()),
+        // "Ask a lawyer", always one tap away in the corner where a floating
+        // button is expected. Clients only; MediaQuery's bottom padding
+        // already includes the floating tab bar.
+        if (!auth.isAdvocate)
+          Positioned(
+            right: 16,
+            bottom: MediaQuery.paddingOf(context).bottom + 16,
+            child: AskLawyerFab(extended: _askExtended),
+          ),
+      ]),
     );
   }
 
@@ -311,8 +376,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 16),
             _searchField(),
             const SizedBox(height: 10),
-            _voiceRow(),
-            const SizedBox(height: 10),
             // Where the lawyers below are being drawn from. Tappable, because
             // a client whose city is wrong needs to fix it here, not hunt for
             // a setting.
@@ -346,60 +409,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// The spoken way in, under the search box.
-  ///
-  /// The search box asks which practice area you want, which is a question
-  /// someone with an unpaid salary cannot answer — they know what happened to
-  /// them, not what it is called. This asks them to say it instead, in
-  /// whichever language they think in, and does the naming on the server.
-  Widget _voiceRow() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () => VoiceSearchSheet.open(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.9),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.mic_rounded, size: 17, color: AppColors.primaryDark),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Apni problem boliye',
-                    style: TextStyle(
-                      fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.white,
-                    ),
-                  ),
-                  Text(
-                    'Hindi me bhi — lawyer khud dhoond denge',
-                    style: TextStyle(fontSize: 11, color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded,
-                size: 20, color: Colors.white.withValues(alpha: 0.8)),
           ],
         ),
       ),

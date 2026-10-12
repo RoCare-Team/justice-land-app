@@ -21,7 +21,9 @@ import 'services/push_service.dart';
 import 'services/query_service.dart';
 import 'services/wallet_service.dart';
 import 'features/consultation/active_call_bar.dart';
+import 'features/consultation/video_call_bubble.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/update/app_update_gate.dart';
 import 'state/auth_controller.dart';
 import 'state/lawyer_controller.dart';
 import 'state/location_controller.dart';
@@ -33,13 +35,10 @@ import 'state/wallet_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Portrait only: a live consultation, a chat thread and a five-step form are
-  // all built around a single column, and the video screen manages its own
-  // orientation while a call is up.
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // Android 15+ draws apps edge-to-edge. Doing this explicitly makes the
+  // behaviour consistent on older Android releases too; each screen handles
+  // its status/navigation-bar insets through SafeArea and MediaQuery.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   // Absent google-services.json this fails and is caught inside — the rest of
   // the app starts exactly as it did before pushes existed. The background
@@ -187,9 +186,18 @@ class _AppState extends State<_App> {
           data: media.copyWith(
             textScaler: media.textScaler.clamp(maxScaleFactor: 1.3),
           ),
-          // The green "call in progress" strip, over every screen while an
-          // audio consultation runs without its own screen showing.
-          child: _BackGuard(child: ActiveCallBar(child: child ?? const SizedBox.shrink())),
+          // Over every screen while a consultation call runs without its own
+          // screen showing: the green "call in progress" strip for audio, the
+          // floating window for video.
+          // Over all of it, when the server says this build must (or may)
+          // be updated.
+          child: AppUpdateGate(
+            child: _BackGuard(
+              child: VideoCallBubble(
+                child: ActiveCallBar(child: child ?? const SizedBox.shrink()),
+              ),
+            ),
+          ),
         );
       },
     );

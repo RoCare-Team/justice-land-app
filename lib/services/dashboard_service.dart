@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatf
 import '../core/config/app_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/endpoints.dart';
+import 'account_deletion.dart';
 import '../models/account.dart';
 import '../models/advocate.dart';
 import '../models/json.dart';
@@ -75,8 +76,10 @@ class DashboardService {
 
   /// Permanently closes the account and removes the lawyer from the public
   /// directory.
-  Future<void> deleteAccount() async {
-    await _api.delete(Endpoints.dashboardProfile);
+  ///
+  /// Through the admin route, by legalCareId — see [AccountDeletion].
+  Future<void> deleteAccount(String legalCareId) async {
+    await AccountDeletion.lawyer(legalCareId);
     await _api.clearSession();
   }
 

@@ -175,75 +175,101 @@ class _AdvocateAuthScreenState extends State<AdvocateAuthScreen> {
     final auth = context.watch<AuthController>();
     final busy = auth.busy;
 
-    return Scaffold(
-      backgroundColor: AppColors.muted,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: _step == _Step.phone
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: busy
-                    ? null
-                    : () => setState(() {
-                          _step = _Step.phone;
-                          _notice = '';
-                          _failure = '';
-                        }),
+    // The phone's back button does what the arrow does: from the code step
+    // back to the number, from the number back to the role choice.
+    return PopScope(
+      canPop: _step == _Step.phone && context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || busy) return;
+        if (_step != _Step.phone) {
+          setState(() {
+            _step = _Step.phone;
+            _notice = '';
+            _failure = '';
+          });
+        } else {
+          context.go('/role');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.muted,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          leading: _step == _Step.phone
+              // Back to where this was opened from, or — reached from the role
+              // choice, which replaces itself — back to that choice, so someone
+              // who tapped "I am a Lawyer" by mistake can still pick client.
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: busy
+                      ? null
+                      : () => context.canPop() ? context.pop() : context.go('/role'),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: busy
+                      ? null
+                      : () => setState(() {
+                            _step = _Step.phone;
+                            _notice = '';
+                            _failure = '';
+                          }),
+                ),
+          title: const Text('For lawyers'),
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              _PhaseRail(step: _step),
+              const SizedBox(height: 22),
+              Text(_title, style: Theme.of(context).textTheme.headlineSmall),
+              if (_subtitle != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _subtitle!,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.ink.withValues(alpha: 0.6)),
+                ),
+              ],
+              const SizedBox(height: 22),
+              if (_step == _Step.phone) _phoneField(),
+              if (_step == _Step.otp) _otpBlock(busy),
+              if (auth.error != null) ...[
+                const SizedBox(height: 14),
+                NoticeBanner(tone: ChipTone.danger, message: auth.error!),
+              ] else if (_failure.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                NoticeBanner(tone: ChipTone.danger, message: _failure),
+              ] else if (_notice.isNotEmpty && _step == _Step.otp) ...[
+                const SizedBox(height: 14),
+                NoticeBanner(tone: ChipTone.success, message: _notice),
+              ],
+              const SizedBox(height: 22),
+              PrimaryButton(
+                label: _cta,
+                busy: busy,
+                onPressed: _canSubmit && !busy ? _submit : null,
               ),
-        title: const Text('For lawyers'),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            _PhaseRail(step: _step),
-            const SizedBox(height: 22),
-            Text(_title, style: Theme.of(context).textTheme.headlineSmall),
-            if (_subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                _subtitle!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.6)),
-              ),
+              if (_step == _Step.phone) ...[
+                const SizedBox(height: 18),
+                Text(
+                  'The same number registers you and signs you in — we work out '
+                  'which.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppColors.ink.withValues(alpha: 0.45)),
+                ),
+              ],
             ],
-            const SizedBox(height: 22),
-            if (_step == _Step.phone) _phoneField(),
-            if (_step == _Step.otp) _otpBlock(busy),
-            if (auth.error != null) ...[
-              const SizedBox(height: 14),
-              NoticeBanner(tone: ChipTone.danger, message: auth.error!),
-            ] else if (_failure.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              NoticeBanner(tone: ChipTone.danger, message: _failure),
-            ] else if (_notice.isNotEmpty && _step == _Step.otp) ...[
-              const SizedBox(height: 14),
-              NoticeBanner(tone: ChipTone.success, message: _notice),
-            ],
-            const SizedBox(height: 22),
-            PrimaryButton(
-              label: _cta,
-              busy: busy,
-              onPressed: _canSubmit && !busy ? _submit : null,
-            ),
-            if (_step == _Step.phone) ...[
-              const SizedBox(height: 18),
-              Text(
-                'The same number registers you and signs you in — we work out '
-                'which.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.ink.withValues(alpha: 0.45)),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

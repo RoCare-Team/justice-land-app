@@ -53,6 +53,7 @@ class ProfileScreen extends StatelessWidget {
                 name: user.anonymous ? 'Anonymous User' : user.displayName,
                 photo: user.anonymous ? null : user.photo,
                 size: 60,
+                expandable: true,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -367,7 +368,7 @@ class _AdvocateProfile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Avatar(name: advocate.name, photo: advocate.photo, size: 60),
+              Avatar(name: advocate.name, photo: advocate.photo, size: 60, expandable: true),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

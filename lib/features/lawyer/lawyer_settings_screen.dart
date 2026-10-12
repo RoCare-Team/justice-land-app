@@ -131,9 +131,10 @@ class LawyerSettingsScreen extends StatelessWidget {
     );
     if (yes != true || !context.mounted) return;
     try {
-      await context.read<DashboardService>().deleteAccount();
+      final auth = context.read<AuthController>();
+      await context.read<DashboardService>().deleteAccount(auth.advocate?.legalCareId ?? '');
       if (!context.mounted) return;
-      await context.read<AuthController>().signOut();
+      await auth.signOut();
       if (context.mounted) context.go('/role');
     } on ApiException catch (e) {
       if (context.mounted) Toast.error(context, e.message);

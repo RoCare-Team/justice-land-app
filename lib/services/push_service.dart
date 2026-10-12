@@ -68,42 +68,69 @@ const _kOffersChannel = AndroidNotificationChannel(
   importance: Importance.defaultImportance,
 );
 
+/// While the app is open, iOS shows no banner of its own: the app shows the
+/// push itself (PushService._showInTray), as it does on Android. That is where
+/// a call, a request, or a chat already on screen is left out — with iOS
+/// drawing its own banner too, each of those showed twice.
+Future<void> _showOpenPushesOurselves(FirebaseMessaging messaging) =>
+    messaging.setForegroundNotificationPresentationOptions(alert: false, badge: true, sound: false);
+
+/// iOS hands the phone its APNs token a moment after launch, and until then
+/// Firebase can neither give out a token nor join a topic — both fail with
+/// "APNS token has not been set yet". Waits up to 10 seconds; elsewhere it is
+/// ready at once.
+Future<bool> _apnsReady(FirebaseMessaging messaging) async {
+  if (defaultTargetPlatform != TargetPlatform.iOS) return true;
+  for (var i = 0; i < 20; i++) {
+    try {
+      if (await messaging.getAPNSToken() != null) return true;
+    } catch (_) {
+      // Not yet.
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  debugPrint('PushService: no APNs token after 10s; this phone gets no pushes this run');
+  return false;
+}
+
+Future<void> _joinTopics(FirebaseMessaging messaging, List<String> topics) async {
+  if (!await _apnsReady(messaging)) return;
+  for (final topic in topics) {
+    try {
+      await messaging.subscribeToTopic(topic);
+      debugPrint('PushService: joined topic $topic');
+    } catch (e) {
+      debugPrint('PushService: could not join topic $topic: $e');
+    }
+  }
+}
+
 /// The single channel earlier builds created, with the phone's default
 /// sound. Removed so it does not linger in the app's notification settings.
 const _kLegacyChannelId = 'consultations';
 
-/// The only screens a push may open — the same list the server checks before
-/// sending (src/lib/notifications.js). Anything else opens Home, so a typo in
-/// an admin send can never crash the app or open a blank screen.
-final _kAllowedRoutes = <RegExp>[
-  RegExp(r'^/$'),
-  RegExp(r'^/lawyers$'), RegExp(r'^/lawyers/[^/?#\s]+$'),
-  RegExp(r'^/services$'), RegExp(r'^/services/all$'), RegExp(r'^/services/[^/?#\s]+$'),
-  RegExp(r'^/consultations$'), RegExp(r'^/consultation/[^/?#\s]+/chat$'),
-  RegExp(r'^/orders$'), RegExp(r'^/wallet$'), RegExp(r'^/saved$'), RegExp(r'^/profile$'),
-  RegExp(r'^/blogs$'), RegExp(r'^/blogs/[^/?#\s]+$'),
-  RegExp(r'^/lawyer$'), RegExp(r'^/lawyer/requests(\?tab=missed)?$'),
-  RegExp(r'^/lawyer/(consultations|queries|earnings|plan|profile)$'),
-];
-
-/// The screen a tap on this push opens: the route it carries when that is an
-/// allowed one, otherwise its type's default (the server's defaults too).
-String pushRoute(Map<String, dynamic> data) {
-  final route = data['route']?.toString() ?? '';
-  if (route.isNotEmpty && _kAllowedRoutes.any((rx) => rx.hasMatch(route))) return route;
+/// The screen a tap on this push opens, decided here from its `type` alone.
+/// The server sends no screen paths: it would have to know the app's routes,
+/// and a renamed screen would quietly break every push that named it. A
+/// `route` in the push is ignored. [lawyer] picks the lawyer app's screen
+/// where the two apps differ.
+String pushRoute(Map<String, dynamic> data, {bool lawyer = false}) {
   final id = _consultationIdOf(data);
+  final home = lawyer ? '/lawyer' : '/';
   switch (data['type']) {
     case 'consultation_update':
     case 'chat_message':
-      return id != null ? '/consultation/$id/chat' : '/consultations';
+      if (id != null) return '/consultation/$id/chat';
+      return lawyer ? '/lawyer/consultations' : '/consultations';
     case 'consultation_request':
     case 'new_request':
       return '/lawyer';
     case 'order_update':
-      return '/orders';
+      return lawyer ? home : '/orders';
     case 'wallet':
-      return '/wallet';
+      return lawyer ? '/lawyer/earnings' : '/wallet';
     case 'lawyer_account':
+      if (!lawyer) return home;
       switch (data['reason']) {
         case 'plan_expiring':
           return '/lawyer/plan';
@@ -113,12 +140,15 @@ String pushRoute(Map<String, dynamic> data) {
           return '/lawyer/profile';
       }
     case 'offer':
-      return '/services/all';
+      // A lawyer's offers are on membership plans; a client's on services.
+      return lawyer ? '/lawyer/plan' : '/services/all';
     case 'blog':
-      final slug = data['slug']?.toString() ?? '';
-      return slug.isNotEmpty ? '/blogs/$slug' : '/blogs';
+      final slug = data['slug']?.toString().trim() ?? '';
+      return RegExp(r'^[A-Za-z0-9._~-]+$').hasMatch(slug) ? '/blogs/$slug' : '/blogs';
     default:
-      return '/';
+      // message, festival, announcement, and any type this build does not
+      // know yet.
+      return home;
   }
 }
 
@@ -213,14 +243,13 @@ class PushService {
       await android?.createNotificationChannel(_kOffersChannel);
 
       final messaging = FirebaseMessaging.instance;
-      unawaited(messaging.subscribeToTopic('all'));
+      unawaited(_joinTopics(messaging, ['all', if (kDebugMode) 'test']));
       // Asked here as well as at sign-in: Android 13+ shows nothing without
       // it, and the `all` topic's offers and festival greetings are for people
       // who have not signed in too. Already answered, this shows no prompt.
       if (askPermission) {
         unawaited(messaging.requestPermission(alert: true, badge: true, sound: true));
       }
-      if (kDebugMode) unawaited(messaging.subscribeToTopic('test'));
 
       _openedSub?.cancel();
       _openedSub = FirebaseMessaging.onMessageOpenedApp.listen((m) => _handleTap(m.data));
@@ -271,8 +300,9 @@ class PushService {
 
       final settings = await messaging.requestPermission(alert: true, badge: true, sound: true);
       if (settings.authorizationStatus == AuthorizationStatus.denied) return;
-      await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+      await _showOpenPushesOurselves(messaging);
 
+      if (!await _apnsReady(messaging)) return;
       unawaited(messaging.subscribeToTopic('${role}s'));
       final token = await messaging.getToken();
       if (token != null) await _register(token);
@@ -287,6 +317,8 @@ class PushService {
   /// screen, and a chat message for the chat already on screen.
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final data = message.data;
+    debugPrint('PushService: push while open: ${data['type']} ${_consultationIdOf(data)} '
+        '(${WidgetsBinding.instance.lifecycleState})');
     final id = _consultationIdOf(data);
     switch (data['type']) {
       case _kIncomingCall:
@@ -308,6 +340,12 @@ class PushService {
       case 'new_request':
         // The lawyer's in-app poll rings for it already.
         return;
+      case null:
+        // A request push from before `type` existed, which the server still
+        // sends alongside a call's own incoming_call push: the call screen or
+        // the in-app ringing sheet has it already, and a second "Incoming
+        // call" in the tray is only noise.
+        if (id != null) return;
       case 'chat_message':
         final here = AppRouter.instance?.routerDelegate.currentConfiguration.uri.path;
         if (id != null && here == '/consultation/$id/chat') return;
@@ -404,7 +442,7 @@ class PushService {
       _navigate('/lawyer', then: () => onOpened?.call(id));
       return;
     }
-    _navigate(pushRoute(data));
+    _navigate(pushRoute(data, lawyer: _auth?.isAdvocate ?? false));
   }
 
   void _navigate(String route, {VoidCallback? then}) {
@@ -468,8 +506,7 @@ class PushService {
       );
       if (settings.authorizationStatus == AuthorizationStatus.denied) return;
 
-      await FirebaseMessaging.instance
-          .setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+      await _showOpenPushesOurselves(FirebaseMessaging.instance);
 
       // Created once, before the first push can arrive — a channel Android
       // creates for itself from an incoming notification comes in at default
@@ -503,7 +540,10 @@ class PushService {
     if (_role == 'lawyer') {
       saved |= await _quietly('register lawyer token', () => _dashboard.registerLawyerToken(token));
     }
-    if (saved) _registeredToken = token;
+    if (saved) {
+      _registeredToken = token;
+      debugPrint('PushService: registered this phone (${token.substring(0, token.length < 12 ? token.length : 12)}…)');
+    }
   }
 
   /// Just before sign-out, while the session still says whose phone this is:
@@ -533,6 +573,7 @@ class PushService {
   }
 
   void _onCallEvent(CallEvent? event) {
+    debugPrint('PushService: call event ${event?.runtimeType}');
     switch (event) {
       case CallEventActionCallAccept(:final callKitParams):
         _accept(callKitParams.id, video: callKitParams.type == 1);
@@ -578,6 +619,7 @@ class PushService {
   void _accept(String consultationId, {required bool video}) {
     if (!_answered.add(consultationId)) return;
     final router = AppRouter.instance;
+    debugPrint('PushService: accept $consultationId (video: $video, router: ${router != null})');
     router?.go('/lawyer');
     router?.push('/consultation/$consultationId/${video ? 'video' : 'audio'}?answer=1');
     onCallAccepted?.call(consultationId);

@@ -320,6 +320,11 @@ class Endpoints {
   /// GET ?lat=&lng= → reverse geocode to a city.
   static const String geocode = '/api/geocode';
 
+  /// GET ?platform=android|ios&build=&version= → { update: none|optional|force,
+  /// latestVersion, latestBuild, minSupportedBuild, title, message, storeUrl }.
+  /// Public. The server decides `update` for the build it is given.
+  static const String appVersion = '/api/app/version';
+
   /// POST (multipart: file, kind?: photo | cover | gallery) → { url }.
   /// The signed-in lawyer's image upload: the server resizes it and returns a
   /// JPEG data URL to save with the profile. (Not /api/admin/upload — that

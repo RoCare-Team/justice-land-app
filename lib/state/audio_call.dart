@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../core/config/app_config.dart';
+import '../core/platform/ongoing_call.dart';
 import '../core/network/api_exception.dart';
 import '../features/consultation/call_clock.dart';
 import '../features/consultation/call_recorder.dart';
@@ -694,8 +695,21 @@ class AudioCall extends ChangeNotifier {
 
   /// Async work can land after [close]; a disposed notifier must not fire.
   void _notify() {
-    if (!_closed) notifyListeners();
+    if (_closed) return;
+    _syncOngoing();
+    notifyListeners();
   }
+
+  /// A live call with the microphone open keeps running behind the app —
+  /// the screen may already be gone (see [detach]).
+  void _syncOngoing() {
+    final on = _ready && isLive;
+    if (on == _ongoing) return;
+    _ongoing = on;
+    unawaited(on ? OngoingCall.start(this, video: false) : OngoingCall.stop(this));
+  }
+
+  bool _ongoing = false;
 
   // ── End ──────────────────────────────────────────────────────────────────
 
@@ -705,6 +719,10 @@ class AudioCall extends ChangeNotifier {
   void close() {
     if (_closed) return;
     _closed = true;
+    if (_ongoing) {
+      _ongoing = false;
+      unawaited(OngoingCall.stop(this));
+    }
     if (identical(current.value, this)) current.value = null;
     _clock.cancel();
     _signalPoll?.cancel();

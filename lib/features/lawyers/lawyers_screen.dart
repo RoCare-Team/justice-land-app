@@ -373,7 +373,7 @@ class _LawyersScreenState extends State<LawyersScreen> {
             if (byName.isNotEmpty) _Suggestion.header('Lawyers named "$text"'),
             for (final a in byName) _Suggestion.lawyer(a),
             if (forTopic.isNotEmpty) _Suggestion.header('${topic!.topic} lawyers'),
-            for (final a in forTopic) _Suggestion.lawyer(a),
+            for (final a in forTopic) _Suggestion.lawyer(a, topic: topic),
             if (forTopic.isNotEmpty) _Suggestion.seeAll(topic!, results[1].total),
           ];
           _suggestLoading = false;
@@ -1019,14 +1019,24 @@ class _Suggestion {
       _Suggestion._(name, area, true, null);
   factory _Suggestion.area(String name) =>
       _Suggestion._(name, 'Practice area', false, null);
-  factory _Suggestion.lawyer(Advocate a) => _Suggestion._(
-        a.name,
-        [a.specializations.take(2).join(', '), a.city]
-            .where((s) => s.isNotEmpty)
-            .join(' · '),
-        false,
-        a,
-      );
+  /// Under a topic's heading the subtitle names what ties the lawyer to it —
+  /// their matters (or areas) that match — rather than their first two
+  /// areas, which for a lawyer listing many read as unrelated to the search.
+  factory _Suggestion.lawyer(Advocate a, {_Suggestion? topic}) {
+    var what = a.specializations.take(2).join(', ');
+    if (topic != null) {
+      final t = topic.topic.toLowerCase();
+      final pool = topic.isMatter ? a.subSpecializations : a.specializations;
+      final hits = pool.where((s) => s.toLowerCase().contains(t)).take(2).toList();
+      what = hits.isEmpty ? topic.topic : hits.join(', ');
+    }
+    return _Suggestion._(
+      a.name,
+      [what, a.city].where((s) => s.isNotEmpty).join(' · '),
+      false,
+      a,
+    );
+  }
 
   /// A section title in the list, not something to tap.
   factory _Suggestion.header(String title) =>

@@ -378,12 +378,12 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Apni legal problem bataiye',
+                  'Describe your legal problem',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
                 SizedBox(height: 2),
                 Text(
-                  'Hindi ya English — jaise bolna ho bol dijiye',
+                  'Speak in English or Hindi — whichever you prefer',
                   style: TextStyle(fontSize: 12, color: Colors.white70),
                 ),
               ],
@@ -421,7 +421,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
       case _Phase.idle:
         return _idle();
       case _Phase.permission:
-        return _waiting('Microphone ki permission…');
+        return _waiting('Requesting microphone permission…');
       case _Phase.recording:
         return _recording();
       case _Phase.working:
@@ -455,18 +455,18 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Tap karke boliye',
+          'Tap to speak',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink),
         ),
         const SizedBox(height: 8),
         Text(
-          '“Meri company mujhe teen mahine se salary nahi de rahi hai, mujhe lawyer chahiye.”',
+          '“My company has not paid my salary for three months and I need a lawyer.”',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink.withValues(alpha: 0.6)),
         ),
         const SizedBox(height: 12),
         Text(
-          'Bolna band karte hi recording apne aap ruk jayegi',
+          'Recording stops automatically when you stop speaking',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 11.5, color: AppColors.inkFaint),
         ),
@@ -551,10 +551,10 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
         const SizedBox(height: 10),
         Text(
           quiet
-              ? 'Koi awaaz nahi aa rahi — mic check kijiye'
+              ? 'No sound detected — please check your microphone'
               : _heardSpeech
-                  ? 'Sun rahe hain… ruk jaiye to apne aap band ho jayega'
-                  : 'Boliye…',
+                  ? 'Listening… pause and it will stop automatically'
+                  : 'Speak now…',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 13,
@@ -569,7 +569,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
             FilledButton.icon(
               onPressed: () => _stop(),
               icon: const Icon(Icons.stop_rounded, size: 20),
-              label: const Text('Ho gaya'),
+              label: const Text('Done'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
@@ -612,12 +612,12 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
               FilledButton.icon(
                 onPressed: _start,
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Dobara boliye'),
+                label: const Text('Speak again'),
               ),
               const SizedBox(width: 10),
               OutlinedButton(
                 onPressed: () => Navigator.of(context).maybePop(),
-                child: const Text('Band kijiye'),
+                child: const Text('Close'),
               ),
             ],
           ),
@@ -645,7 +645,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'AAPNE KAHA',
+                'YOU SAID',
                 style: TextStyle(
                   fontSize: 10, fontWeight: FontWeight.w700,
                   letterSpacing: 1.1, color: AppColors.inkFaint,
@@ -703,7 +703,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
                         textInputAction: TextInputAction.search,
                         onSubmitted: (_) => _answerCity(),
                         decoration: const InputDecoration(
-                          hintText: 'City, jaise Gurgaon',
+                          hintText: 'City, e.g. Gurgaon',
                           isDense: true,
                         ),
                       ),
@@ -711,7 +711,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
                     const SizedBox(width: 8),
                     FilledButton(
                       onPressed: _answerCity,
-                      child: const Text('Dhundhiye'),
+                      child: const Text('Search'),
                     ),
                   ],
                 ),
@@ -731,12 +731,12 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
             ),
             child: Text(
               result.relaxed.contains('city') && analysis.location.isNotEmpty
-                  ? '${analysis.location} me koi match nahi mila — ye poore India ke lawyers hain.'
+                  ? 'No match found in ${analysis.location} — showing lawyers from across India.'
                   : result.relaxed.isNotEmpty
-                      ? 'Search thoda wide kiya hai, ye sabse kareebi matches hain.'
+                      ? 'We widened the search — these are the closest matches.'
                       : analysis.location.isNotEmpty
-                          ? '${analysis.location} ke lawyers pehle, uske baad baaki India se.'
-                          : 'Sabse kareebi matches pehle.',
+                          ? 'Lawyers in ${analysis.location} first, then the rest of India.'
+                          : 'Closest matches first.',
               style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.warning),
             ),
           ),
@@ -749,12 +749,12 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
             children: [
               const SizedBox(height: 10),
               const Text(
-                'Koi lawyer itna match nahi hua.',
+                'No lawyer matched closely enough.',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
               ),
               const SizedBox(height: 6),
               Text(
-                'Thoda aur detail me boliye, ya directory se khud choose kijiye.',
+                'Try describing it in a little more detail, or choose from the directory yourself.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: AppColors.ink.withValues(alpha: 0.6)),
               ),
@@ -765,7 +765,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
                   FilledButton.icon(
                     onPressed: _start,
                     icon: const Icon(Icons.mic_rounded, size: 18),
-                    label: const Text('Dobara boliye'),
+                    label: const Text('Speak again'),
                   ),
                   const SizedBox(width: 10),
                   OutlinedButton(
@@ -773,7 +773,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
                       Navigator.of(context).maybePop();
                       context.go('/lawyers');
                     },
-                    child: const Text('Lawyers dekhiye'),
+                    child: const Text('Browse lawyers'),
                   ),
                 ],
               ),
@@ -784,14 +784,14 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
             children: [
               Expanded(
                 child: Text(
-                  '${result.lawyers.length} lawyer${result.lawyers.length == 1 ? '' : 's'} aapke liye',
+                  '${result.lawyers.length} lawyer${result.lawyers.length == 1 ? '' : 's'} for you',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
               ),
               TextButton.icon(
                 onPressed: _start,
                 icon: const Icon(Icons.mic_rounded, size: 16),
-                label: const Text('Dobara'),
+                label: const Text('Retry'),
               ),
             ],
           ),
@@ -821,7 +821,7 @@ class _VoiceSearchSheetState extends State<VoiceSearchSheet> {
                             child: Text.rich(
                               TextSpan(children: [
                                 const TextSpan(
-                                  text: 'Ye lawyer kyun? ',
+                                  text: 'Why this lawyer? ',
                                   style: TextStyle(fontWeight: FontWeight.w700),
                                 ),
                                 TextSpan(text: match.reason),

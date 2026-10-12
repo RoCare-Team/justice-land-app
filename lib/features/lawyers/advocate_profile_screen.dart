@@ -250,6 +250,7 @@ class _AdvocateProfileScreenState extends State<AdvocateProfileScreen> {
                     photo: advocate.photo,
                     size: 74,
                     online: _online,
+                    expandable: true,
                   ),
                   if (_online != null) ...[
                     const SizedBox(height: 8),

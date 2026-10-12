@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_legal_care/core/network/api_client.dart';
 import 'package:flutter_legal_care/routing/app_router.dart';
@@ -65,6 +66,12 @@ Future<(ApiClient, AuthController)> _boot(
   required Map<String, Object> server,
 }) async {
   PathProviderPlatform.instance = _FakePathProvider();
+  // Home offers the "Ask a lawyer" sheet a few seconds in (AskLawyerPrompt);
+  // marked as just dismissed, it stays quiet instead of leaving its wait
+  // running past the end of a routing test.
+  SharedPreferences.setMockInitialValues({
+    'ask_prompt_dismissed_at': DateTime.now().millisecondsSinceEpoch,
+  });
   final booted = await tester.runAsync(() async {
     final api = await ApiClient.init();
     api.raw.httpClientAdapter = _StubAdapter(server);

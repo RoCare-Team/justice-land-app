@@ -8,6 +8,7 @@ import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/states.dart';
 import '../../services/auth_service.dart';
+import '../../services/dashboard_service.dart';
 import '../../state/auth_controller.dart';
 
 /// Everything that is neither a task nor a setting: the policies, the way to
@@ -101,15 +102,12 @@ class MoreScreen extends StatelessWidget {
                   tone: AppColors.danger,
                   onTap: () => _confirmLogout(context, auth),
                 ),
-                // Clients only: a lawyer's account is closed from their own
-                // Settings, which also takes them out of the directory.
-                if (auth.isUser)
-                  _Item(
-                    icon: Icons.delete_forever_outlined,
-                    label: 'Delete account',
-                    tone: AppColors.danger,
-                    onTap: () => _confirmDelete(context, auth),
-                  ),
+                _Item(
+                  icon: Icons.delete_forever_outlined,
+                  label: 'Delete account',
+                  tone: AppColors.danger,
+                  onTap: () => _confirmDelete(context, auth),
+                ),
               ],
             ),
           ],
@@ -176,18 +174,22 @@ class MoreScreen extends StatelessWidget {
     if (context.mounted) context.go('/role');
   }
 
-  /// In the app itself, as App Store guideline 5.1.1(v) requires of any app
-  /// that lets people sign up: confirm, delete, sign out — the same flow the
-  /// lawyer side has in Settings.
+  /// In the app itself, as App Store guideline 5.1.1(v) requires: confirm,
+  /// delete, sign out. Which account is deleted follows who is
+  /// signed in: a lawyer by their legalCareId, a client by their user id.
   Future<void> _confirmDelete(BuildContext context, AuthController auth) async {
+    final isLawyer = auth.isAdvocate;
     final yes = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete your account?'),
-        content: const Text(
-          'This permanently deletes your Justiceland account, your consultation '
-          'history and your saved details. Any wallet balance left is lost. '
-          'This cannot be undone.',
+        content: Text(
+          isLawyer
+              ? 'This permanently closes your lawyer account and removes you '
+                  'from the directory. It cannot be undone.'
+              : 'This permanently deletes your Justiceland account, your '
+                  'consultation history and your saved details. Any wallet '
+                  'balance left is lost. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -204,21 +206,17 @@ class MoreScreen extends StatelessWidget {
     );
     if (yes != true || !context.mounted) return;
     try {
-      await context.read<AuthService>().deleteAccount();
+      if (isLawyer) {
+        await context.read<DashboardService>().deleteAccount(auth.advocate?.legalCareId ?? '');
+      } else {
+        await context.read<AuthService>().deleteAccount(auth.user?.id ?? '');
+      }
       await auth.signOut();
       if (!context.mounted) return;
       Toast.success(context, 'Your account has been deleted.');
       context.go('/role');
     } on ApiException catch (e) {
-      if (!context.mounted) return;
-      // 404/405: the server has no delete route yet — say so plainly rather
-      // than show "method not allowed".
-      Toast.error(
-        context,
-        e.statusCode == 404 || e.statusCode == 405
-            ? 'Account deletion is not available right now. Please try again later.'
-            : e.message,
-      );
+      if (context.mounted) Toast.error(context, e.message);
     }
   }
 }

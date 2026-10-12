@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 
-val   = keystoreProperties.containsKey("storeFile")
+val hasUploadKey = keystoreProperties.containsKey("storeFile")
 
 // Firebase (push notifications — see lib/services/push_service.dart) reads its
 // project config from this file, which is not committed (real credentials).
@@ -81,8 +81,11 @@ android {
             // name you, not "CN=Android Debug".
             signingConfig = signingConfigs.getByName(if (hasUploadKey) "upload" else "debug")
 
-            // Razorpay's WebView bridge and libwebrtc both break under an
-            // unconfigured R8 pass — see proguard-rules.pro.
+            // Keep the upload small and avoid retaining resources that R8 has
+            // proved unreachable. The rules below preserve Razorpay's WebView
+            // bridge and WebRTC's JNI entry points.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -97,4 +100,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // WindowCompat, for edge to edge in MainActivity.
+    implementation("androidx.core:core-ktx:1.13.1")
 }

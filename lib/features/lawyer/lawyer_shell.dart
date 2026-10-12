@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/widgets/tab_back_guard.dart';
 import '../../models/consultation.dart';
 import '../../state/lawyer_controller.dart';
 import 'lawyer_widgets.dart';
@@ -107,7 +108,7 @@ class _LawyerShellState extends State<LawyerShell> {
     var index = _tabs.indexWhere((t) => t.path == location);
     if (index < 0) index = 0;
 
-    return Scaffold(
+    return TabBackGuard(homePath: '/lawyer', child: Scaffold(
       backgroundColor: AppColors.muted,
       body: widget.child,
       bottomNavigationBar: Container(
@@ -130,7 +131,7 @@ class _LawyerShellState extends State<LawyerShell> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _tab(_Tab tab, bool selected, int badge) {

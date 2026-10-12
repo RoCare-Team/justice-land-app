@@ -66,7 +66,7 @@ class ChatMessageList extends StatelessWidget {
     final count = intro + messages.length + pending.length + (uploadingName == null ? 0 : 1);
     return ListView.builder(
       controller: controller,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       itemCount: count,
       itemBuilder: (context, i) {
         if (showIntro && i == 0) return const _IntroPill();
@@ -117,6 +117,15 @@ class ChatMessageList extends StatelessWidget {
   }
 }
 
+/// The chat's colours — WhatsApp's light palette, so the thread reads the way
+/// people already expect a chat to: a warm backdrop, white bubbles for the
+/// other side, pale green for this one.
+const chatWallpaper = Color(0xFFEFEAE2);
+const _mineColor = Color(0xFFD9FDD3);
+const _theirsColor = Colors.white;
+const _textColor = Color(0xFF111B21);
+const _metaColor = Color(0xFF667781);
+
 class _IntroPill extends StatelessWidget {
   const _IntroPill();
 
@@ -124,21 +133,23 @@ class _IntroPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        margin: const EdgeInsets.fromLTRB(24, 2, 24, 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border),
+          color: const Color(0xFFFFF3C4),
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.lock_outline_rounded, size: 12, color: AppColors.inkFaint),
-            const SizedBox(width: 5),
-            Text(
-              'Private consultation · billed per minute',
-              style: TextStyle(fontSize: 11, color: AppColors.inkFaint),
+            Icon(Icons.lock_rounded, size: 11, color: Color(0xFF54656F)),
+            SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                'Private consultation · billed per minute',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF54656F)),
+              ),
             ),
           ],
         ),
@@ -154,14 +165,17 @@ class _DaySeparator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 1, offset: Offset(0, 1))],
       ),
-      child: Text(label, style: TextStyle(fontSize: 11, color: AppColors.inkFaint)),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Color(0xFF54656F)),
+      ),
     );
   }
 }
@@ -179,97 +193,120 @@ class _Bubble extends StatelessWidget {
   /// Follows a message from the same side: tighter gap, no tail corner.
   final bool grouped;
 
-  /// Not yet confirmed by the server — faded, with a clock instead of a tick.
+  /// Not yet confirmed by the server — a clock instead of a tick.
   final bool sending;
+
+  /// Time and tick, in the bubble's bottom-right corner.
+  Widget _meta() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!sending)
+          Text(
+            Fmt.time(message.at),
+            style: const TextStyle(fontSize: 11, color: _metaColor),
+          ),
+        // Clock until the server has it, then a tick — the same as the
+        // website.
+        if (mine) ...[
+          const SizedBox(width: 3),
+          Icon(
+            sending ? Icons.schedule_rounded : Icons.done_rounded,
+            size: 14,
+            color: _metaColor,
+          ),
+        ],
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final attachment = message.attachment;
     final caption = message.caption;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Opacity(
-        opacity: sending ? 0.75 : 1,
-        child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        margin: EdgeInsets.only(top: grouped ? 2 : 8),
-        padding: attachment == null
-            ? const EdgeInsets.fromLTRB(13, 8, 11, 6)
-            : const EdgeInsets.all(5),
-        decoration: _bubbleDecoration(mine, grouped: grouped),
+    // Room kept at the end of the last line for the time, so short messages
+    // stay one line with the time beside them, as in WhatsApp.
+    final metaWidth = (sending ? 0.0 : 52.0) + (mine ? 18.0 : 0.0);
+
+    final Widget body;
+    if (attachment == null) {
+      body = Padding(
+        padding: const EdgeInsets.fromLTRB(9, 6, 8, 5),
+        child: Stack(
+          children: [
+            Text.rich(
+              TextSpan(
+                text: caption,
+                children: [WidgetSpan(child: SizedBox(width: metaWidth, height: 12))],
+              ),
+              style: const TextStyle(fontSize: 14.5, height: 1.3, color: _textColor),
+            ),
+            Positioned(right: 0, bottom: 0, child: _meta()),
+          ],
+        ),
+      );
+    } else {
+      body = Padding(
+        padding: const EdgeInsets.all(4),
         child: Column(
-          crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (attachment != null) AttachmentView(attachment: attachment, mine: mine),
+            AttachmentView(attachment: attachment, mine: mine),
             Padding(
-              padding: attachment == null
-                  ? EdgeInsets.zero
-                  : const EdgeInsets.fromLTRB(8, 6, 8, 2),
-              child: Column(
-                crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  if (caption.isNotEmpty)
-                    Text(
-                      caption,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.45,
-                        color: mine ? Colors.white : AppColors.inkStrong,
-                      ),
-                    ),
-                  if (caption.isNotEmpty) const SizedBox(height: 2),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!sending)
-                        Text(
-                          Fmt.time(message.at),
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            color: mine ? Colors.white70 : AppColors.inkFaint,
+              padding: const EdgeInsets.fromLTRB(5, 4, 4, 1),
+              child: caption.isEmpty
+                  ? Align(alignment: Alignment.centerRight, child: _meta())
+                  : Stack(
+                      children: [
+                        Text.rich(
+                          TextSpan(
+                            text: caption,
+                            children: [WidgetSpan(child: SizedBox(width: metaWidth, height: 12))],
                           ),
+                          style: const TextStyle(fontSize: 14.5, height: 1.3, color: _textColor),
                         ),
-                      // Clock until the server has it, then a tick — the
-                      // same as the website.
-                      if (mine) ...[
-                        const SizedBox(width: 3),
-                        Icon(
-                          sending ? Icons.schedule_rounded : Icons.done_rounded,
-                          size: 13,
-                          color: Colors.white70,
-                        ),
+                        Positioned(right: 0, bottom: 0, child: _meta()),
                       ],
-                    ],
-                  ),
-                ],
-              ),
+                    ),
             ),
           ],
         ),
-      ),
+      );
+    }
+
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: attachment == null
+              ? MediaQuery.of(context).size.width * 0.8
+              : 268,
+        ),
+        margin: EdgeInsets.only(
+          top: grouped ? 2 : 6,
+          left: mine ? 48 : 0,
+          right: mine ? 0 : 48,
+        ),
+        decoration: _bubbleDecoration(mine, grouped: grouped),
+        child: body,
       ),
     );
   }
 }
 
-/// Rounded all round, with a small "tail" corner on the first bubble of a run
-/// — the corner on the sender's side, as on the website.
+/// Small rounded corners, with the sharp "tail" corner at the top on the
+/// sender's side for the first bubble of a run — WhatsApp's shape.
 BoxDecoration _bubbleDecoration(bool mine, {bool grouped = false}) => BoxDecoration(
-      color: mine ? AppColors.primary : AppColors.surface,
+      color: mine ? _mineColor : _theirsColor,
       borderRadius: BorderRadius.only(
-        topLeft: const Radius.circular(18),
-        topRight: const Radius.circular(18),
-        bottomLeft: Radius.circular(!mine && !grouped ? 6 : 18),
-        bottomRight: Radius.circular(mine && !grouped ? 6 : 18),
+        topLeft: Radius.circular(!mine && !grouped ? 2 : 10),
+        topRight: Radius.circular(mine && !grouped ? 2 : 10),
+        bottomLeft: const Radius.circular(10),
+        bottomRight: const Radius.circular(10),
       ),
-      border: mine ? null : Border.all(color: AppColors.border),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 3,
-          offset: const Offset(0, 1),
-        ),
+      boxShadow: const [
+        BoxShadow(color: Color(0x1A000000), blurRadius: 1, offset: Offset(0, 1)),
       ],
     );
 
@@ -289,37 +326,33 @@ class AttachmentView extends StatelessWidget {
         : const ['xls', 'xlsx', 'csv'].contains(attachment.extension)
             ? Icons.table_chart_rounded
             : Icons.description_rounded;
+    final tint = attachment.isPdf
+        ? AppColors.danger
+        : const ['xls', 'xlsx', 'csv'].contains(attachment.extension)
+            ? const Color(0xFF15803D)
+            : AppColors.info;
     return Material(
-      color: mine ? Colors.white.withValues(alpha: 0.12) : AppColors.muted,
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.black.withValues(alpha: mine ? 0.05 : 0.04),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         onTap: () => openAttachment(context, attachment),
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(8),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                height: 40,
-                width: 40,
+                height: 38,
+                width: 38,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: mine
-                      ? Colors.white.withValues(alpha: 0.15)
-                      : attachment.isPdf
-                          ? AppColors.dangerSoft
-                          : AppColors.accentSoft,
-                  borderRadius: BorderRadius.circular(10),
+                  color: tint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: mine ? Colors.white : attachment.isPdf ? AppColors.danger : AppColors.primary,
-                ),
+                child: Icon(icon, size: 22, color: tint),
               ),
               const SizedBox(width: 10),
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -328,29 +361,22 @@ class AttachmentView extends StatelessWidget {
                       attachment.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: mine ? Colors.white : AppColors.inkStrong,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: _textColor,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${attachment.sizeLabel} · ${attachment.extension.toUpperCase()} · Tap to open',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: mine ? Colors.white70 : AppColors.inkFaint,
-                      ),
+                      '${attachment.extension.toUpperCase()} · ${attachment.sizeLabel}',
+                      style: const TextStyle(fontSize: 11.5, color: _metaColor),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 6),
-              Icon(
-                Icons.open_in_new_rounded,
-                size: 16,
-                color: mine ? Colors.white70 : AppColors.inkFaint,
-              ),
+              const Icon(Icons.download_rounded, size: 20, color: _metaColor),
             ],
           ),
         ),
@@ -395,14 +421,21 @@ class _ImagePreview extends StatelessWidget {
       builder: (context, snap) {
         final bytes = snap.data;
         return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           child: SizedBox(
-            width: 220,
-            height: 220,
+            width: 260,
+            height: 260,
             child: bytes != null
                 ? GestureDetector(
                     onTap: () => _showFullImage(context, attachment, bytes),
-                    child: Image.memory(bytes, fit: BoxFit.cover),
+                    // Decoded at the size it is shown, not the camera's full
+                    // resolution — a few of these would otherwise hold tens of
+                    // megabytes.
+                    child: Image.memory(
+                      bytes,
+                      fit: BoxFit.cover,
+                      cacheWidth: (260 * MediaQuery.devicePixelRatioOf(context)).round(),
+                    ),
                   )
                 : Container(
                     color: Colors.black12,
@@ -463,8 +496,8 @@ class _UploadingBubble extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: Container(
         width: 240,
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.fromLTRB(10, 9, 10, 7),
         decoration: _bubbleDecoration(true),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,14 +505,14 @@ class _UploadingBubble extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.upload_file_rounded, color: Colors.white, size: 20),
+                const Icon(Icons.upload_file_rounded, color: _metaColor, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                    style: const TextStyle(color: _textColor, fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
               ],
@@ -489,15 +522,15 @@ class _UploadingBubble extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: progress > 0 ? progress : null,
-                minHeight: 4,
-                backgroundColor: Colors.white24,
-                color: AppColors.success,
+                minHeight: 3,
+                backgroundColor: Colors.black12,
+                color: const Color(0xFF15803D),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               'Sending… ${(progress * 100).round()}%',
-              style: const TextStyle(color: Colors.white70, fontSize: 11),
+              style: const TextStyle(color: _metaColor, fontSize: 11),
             ),
           ],
         ),
@@ -539,38 +572,45 @@ class _ChatComposerState extends State<ChatComposer> {
     }
   }
 
+  /// The paperclip: WhatsApp's row of round icons.
   Future<void> _attach(SessionController controller) async {
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.description_rounded, color: AppColors.primary),
-              title: const Text('Document'),
-              subtitle: const Text('PDF, Word, Excel or text — up to 10 MB'),
-              onTap: () => Navigator.of(context).pop('file'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
-              title: const Text('Photo from gallery'),
-              onTap: () => Navigator.of(context).pop('gallery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_rounded, color: AppColors.primary),
-              title: const Text('Take a photo'),
-              subtitle: const Text('Of a notice, an order, any paper'),
-              onTap: () => Navigator.of(context).pop('camera'),
-            ),
-            const SizedBox(height: 8),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _AttachOption(
+                icon: Icons.insert_drive_file_rounded,
+                label: 'Document',
+                color: const Color(0xFF7F66FF),
+                onTap: () => Navigator.of(context).pop('file'),
+              ),
+              _AttachOption(
+                icon: Icons.photo_camera_rounded,
+                label: 'Camera',
+                color: const Color(0xFFFF2E74),
+                onTap: () => Navigator.of(context).pop('camera'),
+              ),
+              _AttachOption(
+                icon: Icons.photo_rounded,
+                label: 'Gallery',
+                color: const Color(0xFFC861FA),
+                onTap: () => Navigator.of(context).pop('gallery'),
+              ),
+            ],
+          ),
         ),
       ),
     );
     if (choice == null || !mounted) return;
+    await _pick(controller, choice);
+  }
 
+  Future<void> _pick(SessionController controller, String choice) async {
     String? path;
     String? name;
     int size = 0;
@@ -612,53 +652,72 @@ class _ChatComposerState extends State<ChatComposer> {
   Widget build(BuildContext context) {
     final controller = context.watch<SessionController>();
     final uploading = controller.uploadingName != null;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            IconButton(
-              tooltip: 'Attach a document or photo',
-              onPressed: uploading ? null : () => _attach(controller),
-              icon: const Icon(Icons.attach_file_rounded),
-              color: AppColors.inkMuted,
-            ),
             Expanded(
-              child: TextField(
-                controller: _input,
-                maxLines: 4,
-                minLines: 1,
-                maxLength: 2000,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: 'Type a message…',
-                  counterText: '',
-                  filled: true,
-                  fillColor: AppColors.muted,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
-                  ),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x14000000), blurRadius: 1, offset: Offset(0, 1)),
+                  ],
                 ),
-                onSubmitted: (_) => _send(controller),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _input,
+                        maxLines: 5,
+                        minLines: 1,
+                        maxLength: 2000,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: const TextStyle(fontSize: 15.5, color: _textColor),
+                        decoration: const InputDecoration(
+                          hintText: 'Message',
+                          hintStyle: TextStyle(color: _metaColor),
+                          counterText: '',
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onSubmitted: (_) => _send(controller),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Attach a document or photo',
+                      onPressed: uploading ? null : () => _attach(controller),
+                      icon: Transform.rotate(
+                        angle: -0.6,
+                        child: const Icon(Icons.attach_file_rounded),
+                      ),
+                      color: _metaColor,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      tooltip: 'Take a photo',
+                      onPressed: uploading ? null : () => _pick(controller, 'camera'),
+                      icon: const Icon(Icons.photo_camera_rounded),
+                      color: _metaColor,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Material(
               color: AppColors.primary,
               shape: const CircleBorder(),
@@ -668,12 +727,49 @@ class _ChatComposerState extends State<ChatComposer> {
                 // the thread with its clock, so the next one can follow.
                 onTap: () => _send(controller),
                 child: const SizedBox(
-                  height: 46,
-                  width: 46,
-                  child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  height: 48,
+                  width: 48,
+                  child: Icon(Icons.send_rounded, color: Colors.white, size: 21),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachOption extends StatelessWidget {
+  const _AttachOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 27,
+              backgroundColor: color,
+              child: Icon(icon, color: Colors.white, size: 26),
+            ),
+            const SizedBox(height: 6),
+            Text(label, style: const TextStyle(fontSize: 12.5, color: _metaColor)),
           ],
         ),
       ),
@@ -690,7 +786,7 @@ Future<void> showInCallChat(BuildContext context, {required bool viewerIsAdvocat
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: AppColors.muted,
+    backgroundColor: chatWallpaper,
     builder: (sheetContext) => ChangeNotifierProvider.value(
       value: controller,
       child: Padding(
@@ -796,9 +892,13 @@ class _InCallChatState extends State<_InCallChat> {
 /// The round "Chat" button for a call's control bar, with a badge counting
 /// messages from the other side since the sheet was last opened.
 class InCallChatButton extends StatefulWidget {
-  const InCallChatButton({super.key, required this.viewerIsAdvocate, this.size = 58});
+  const InCallChatButton({super.key, required this.viewerIsAdvocate, this.size = 58, this.onOpen});
   final bool viewerIsAdvocate;
   final double size;
+
+  /// Opens the chat instead of the sheet — the video call opens the full
+  /// chat screen and shrinks itself into the floating window.
+  final VoidCallback? onOpen;
 
   @override
   State<InCallChatButton> createState() => _InCallChatButtonState();
@@ -830,6 +930,10 @@ class _InCallChatButtonState extends State<InCallChatButton> {
             customBorder: const CircleBorder(),
             onTap: () async {
               setState(() => _seen = theirs);
+              if (widget.onOpen != null) {
+                widget.onOpen!();
+                return;
+              }
               await showInCallChat(context, viewerIsAdvocate: widget.viewerIsAdvocate);
               if (mounted) setState(() => _seen = _theirs(context.read<SessionController>()));
             },

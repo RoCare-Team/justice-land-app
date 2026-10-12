@@ -365,7 +365,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           Center(
             child: Stack(
               children: [
-                Avatar(name: _fullName.text, photo: _photo, size: 92),
+                Avatar(name: _fullName.text, photo: _photo, size: 92, expandable: true),
                 Positioned(
                   right: 0,
                   bottom: 0,

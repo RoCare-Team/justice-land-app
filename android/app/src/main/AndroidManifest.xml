@@ -12,6 +12,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
+    <!-- A live call keeps running when the user leaves the app: see
+         OngoingCallService (phoneCall + microphone + camera). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
+
     <!-- "Lawyers near me" city detection (geolocator). -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
@@ -31,12 +39,18 @@
     <application
         android:label="Justiceland"
         android:name="${applicationName}"
+        android:resizeableActivity="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher">
+        <!-- singleTask: there is only ever one MainActivity, and so one Flutter
+             engine. With singleTop, Accept on the incoming-call screen (its own
+             task) started a second MainActivity with a fresh engine: the call
+             opened in the old one, out of sight, and the lawyer landed on the
+             new one's home screen with the call never answered. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
@@ -56,6 +70,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <service
+            android:name=".OngoingCallService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone|camera"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

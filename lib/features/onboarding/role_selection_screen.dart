@@ -270,6 +270,12 @@ class _RoleArt extends StatelessWidget {
               child: Image.asset(
                 image,
                 fit: BoxFit.cover,
+                // These are small fixed-size cards; decode the bundled art at
+                // its rendered pixel size instead of its source resolution.
+                cacheWidth:
+                    (76 * MediaQuery.devicePixelRatioOf(context)).round(),
+                cacheHeight:
+                    (82 * MediaQuery.devicePixelRatioOf(context)).round(),
                 // The heads sit high in both drawings; centring the crop cuts
                 // the tops off at this size.
                 alignment: Alignment.topCenter,

@@ -44,7 +44,7 @@ class LawyerProfileScreen extends StatelessWidget {
             LCard(
               child: Column(
                 children: [
-                  Avatar(name: advocate.name, photo: advocate.photo, size: 88, online: lawyer.available),
+                  Avatar(name: advocate.name, photo: advocate.photo, size: 88, online: lawyer.available, expandable: true),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -93,6 +93,8 @@ class LawyerProfileScreen extends StatelessWidget {
                   _detail('Experience', Fmt.experience(advocate.experience)),
                   _detail('Languages', advocate.languages.join(', ')),
                   _detail('Location', [advocate.city, advocate.state].where((s) => s.isNotEmpty).join(', ')),
+                  _detail('Office', advocate.office.name),
+                  _detail('Office address', advocate.office.fullAddress),
                 ],
               ),
             ),
