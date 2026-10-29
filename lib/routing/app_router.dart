@@ -15,6 +15,7 @@ import '../features/consultation/consultations_screen.dart';
 import '../features/consultation/video_call_screen.dart';
 import '../features/content/content_screens.dart';
 import '../features/dashboard/edit_profile_screen.dart';
+import '../features/content/legal_pages.dart';
 import '../features/document_review/document_review_screen.dart';
 import '../features/document_review/review_screens.dart';
 import '../features/home/home_screen.dart';
@@ -283,6 +284,11 @@ class AppRouter {
               BlogDetailScreen(slug: state.pathParameters['slug']!),
         ),
         GoRoute(path: '/contact', builder: (_, __) => const ContactScreen()),
+        // About, Privacy, Terms, Disclaimer, Refund — inside the app, not Safari.
+        GoRoute(
+          path: '/legal/:id',
+          builder: (context, state) => LegalPageScreen(id: state.pathParameters['id']!),
+        ),
       ],
       errorBuilder: (context, state) => Scaffold(
         appBar: AppBar(title: const Text('Not found')),

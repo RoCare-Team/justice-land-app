@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'blog_body.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
@@ -277,25 +278,6 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
     }
   }
 
-  /// The body comes from the admin's rich-text editor as HTML. Rendering a
-  /// full HTML engine for a few paragraphs is not worth the dependency, so the
-  /// tags are stripped and the paragraph breaks kept.
-  String _plainText(String html) {
-    return html
-        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
-        .replaceAll(RegExp(r'</p>', caseSensitive: false), '\n\n')
-        .replaceAll(RegExp(r'</h[1-6]>', caseSensitive: false), '\n\n')
-        .replaceAll(RegExp(r'</li>', caseSensitive: false), '\n')
-        .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '•  ')
-        .replaceAll(RegExp(r'<[^>]+>'), '')
-        .replaceAll('&nbsp;', ' ')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-        .trim();
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -362,10 +344,8 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
                   ],
                 ),
                 const Divider(height: 28),
-                Text(
-                  _plainText(post.content),
-                  style: const TextStyle(fontSize: 15, height: 1.7),
-                ),
+                // Drawn natively — headings, lists, bold and tappable links.
+                BlogBody(content: post.content),
               ],
             ),
           ),

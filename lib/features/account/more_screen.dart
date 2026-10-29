@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
@@ -34,7 +33,7 @@ class MoreScreen extends StatelessWidget {
               _Item(
                 icon: Icons.shield_outlined,
                 label: 'Privacy & Security',
-                onTap: () => _openOnWeb(context, '/privacy'),
+                onTap: () => context.push('/legal/privacy'),
               ),
               _Item(
                 icon: Icons.help_outline_rounded,
@@ -44,22 +43,22 @@ class MoreScreen extends StatelessWidget {
               _Item(
                 icon: Icons.info_outline_rounded,
                 label: 'About Justiceland',
-                onTap: () => _openOnWeb(context, '/about'),
+                onTap: () => context.push('/legal/about'),
               ),
               _Item(
                 icon: Icons.description_outlined,
                 label: 'Terms & Conditions',
-                onTap: () => _openOnWeb(context, '/terms'),
+                onTap: () => context.push('/legal/terms'),
               ),
               _Item(
                 icon: Icons.gavel_rounded,
                 label: 'Disclaimer',
-                onTap: () => _openOnWeb(context, '/disclaimer'),
+                onTap: () => context.push('/legal/disclaimer'),
               ),
               _Item(
                 icon: Icons.currency_rupee_rounded,
                 label: 'Refund Policy',
-                onTap: () => _openOnWeb(context, '/refund'),
+                onTap: () => context.push('/legal/refund'),
               ),
             ],
           ),
@@ -136,14 +135,6 @@ class MoreScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _openOnWeb(BuildContext context, String path) async {
-    final url = Uri.parse('${AppConfig.baseUrl}$path');
-    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
-      Toast.error(context, 'Could not open $path.');
-    }
   }
 
   Future<void> _confirmLogout(BuildContext context, AuthController auth) async {

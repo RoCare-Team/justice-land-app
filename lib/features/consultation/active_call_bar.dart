@@ -48,7 +48,7 @@ class ActiveCallBar extends StatelessWidget {
   }
 }
 
-class _Strip extends   {
+class _Strip extends StatelessWidget {
   const _Strip({required this.call});
 
   final AudioCall call;

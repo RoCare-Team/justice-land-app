@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
@@ -60,10 +59,10 @@ class LawyerSettingsScreen extends StatelessWidget {
           _group([
             if (advocate != null && advocate.isPublished)
               _item(context, Icons.open_in_new_rounded, 'View Public Profile',
-                  () => _openWeb(context, '/lawyers/${advocate.profilePath}')),
+                  () => context.push('/lawyers/${advocate.profilePath}')),
             _item(context, Icons.help_outline_rounded, 'Help & Support', () => context.push('/contact')),
-            _item(context, Icons.privacy_tip_outlined, 'Privacy Policy', () => _openWeb(context, '/privacy')),
-            _item(context, Icons.description_outlined, 'Terms & Conditions', () => _openWeb(context, '/terms')),
+            _item(context, Icons.privacy_tip_outlined, 'Privacy Policy', () => context.push('/legal/privacy')),
+            _item(context, Icons.description_outlined, 'Terms & Conditions', () => context.push('/legal/terms')),
           ]),
           const SizedBox(height: 14),
           _group([
@@ -103,11 +102,6 @@ class LawyerSettingsScreen extends StatelessWidget {
       trailing: tone == null ? Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint) : null,
       onTap: onTap,
     );
-  }
-
-  Future<void> _openWeb(BuildContext context, String path) async {
-    final opened = await launchUrl(Uri.parse('${AppConfig.baseUrl}$path'), mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) Toast.error(context, 'Could not open $path.');
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
