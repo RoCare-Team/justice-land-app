@@ -150,6 +150,7 @@ class RefData {
     ServiceGroup('Intellectual Property', 'intellectual-property-lawyer'),
     ServiceGroup('Real Estate / RERA', 'real-estate-lawyer'),
     ServiceGroup('Immigration Law', 'immigration-lawyer'),
+    ServiceGroup('Data Privacy & DPDP', 'data-privacy-lawyer'),
   ];
 
   static List<String> citiesIn(String state) =>
